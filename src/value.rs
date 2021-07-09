@@ -1,4 +1,4 @@
-use crate::{Register, Word};
+use crate::{DurationCycles, Register, Word};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Value {
@@ -31,6 +31,19 @@ pub enum Value {
     Literal {
         value: Word,
     },
+}
+
+impl DurationCycles for Value {
+    fn base_cycle_count(&self) -> usize {
+        // All values that read a word (0x10-0x17, 0x1e, and 0x1f) take 1 cycle to look up.
+        // The rest take 0 cycles.
+        match self {
+            Self::AtAddressFromNextWordPlusRegister { .. } => 1,
+            Self::ValueAtAddressFromNextWord { .. } => 1,
+            Self::NextWordLiteral { .. } => 1,
+            _ => 0,
+        }
+    }
 }
 
 impl From<u16> for Value {

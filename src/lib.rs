@@ -5,12 +5,13 @@ mod value;
 use crate::register::Register;
 
 type Word = u16;
-type Cycles = u16;
-
-struct Duration(Cycles);
 
 const NUM_REGISTERS: usize = 8;
 const NUM_RAM_WORDS: usize = 0x10000;
+
+trait DurationCycles {
+    fn base_cycle_count(&self) -> usize;
+}
 
 /// A DCPU-16 emulator.
 pub struct DCPU16 {
