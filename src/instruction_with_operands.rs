@@ -109,7 +109,7 @@ impl Debug for InstructionWithOperands {
                 "{:04x?} ; {} => {:?}",
                 self.word,
                 self.disassemble(),
-                self.instruction
+                self.disassemble_human()
             )
         } else if self.len() == 2 {
             let second_word = if self.a.value_type.len() == 1 {
@@ -128,7 +128,7 @@ impl Debug for InstructionWithOperands {
                 self.word,
                 second_word,
                 self.disassemble(),
-                self.instruction
+                self.disassemble_human()
             )
         } else {
             assert_eq!(self.a.value_type.len(), 1);
@@ -145,7 +145,7 @@ impl Debug for InstructionWithOperands {
                     .get_literal()
                     .unwrap(),
                 self.disassemble(),
-                self.instruction
+                self.disassemble_human()
             )
         }
     }

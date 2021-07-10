@@ -7,6 +7,11 @@ use crate::Register;
 pub trait Disassemble {
     /// Gets the mnemonic for the given instruction.
     fn disassemble(&self) -> String;
+
+    /// Gets a human-readable string for the given instruction.
+    fn disassemble_human(&self) -> String {
+        self.disassemble()
+    }
 }
 
 impl Disassemble for Register {
@@ -49,6 +54,33 @@ impl Disassemble for ResolvedValue {
             Value::AtAddressFromRegister { register } => {
                 String::from(format!("[{}]", register.disassemble()))
             }
+        }
+    }
+
+    fn disassemble_human(&self) -> String {
+        match self.value_type {
+            Value::AtAddressFromNextWord => String::from(format!(
+                "RAM[0x{:02X}]",
+                self.value_address.get_literal().unwrap()
+            )),
+            // Value::OfOverflow => String::from("O"),
+            // Value::OfProgramCounter => String::from("PC"),
+            // Value::OfStackPointer => String::from("SP"),
+            Value::AtAddressFromNextWordPlusRegister { .. } => match self.value_address {
+                Address::AddressOffset { address, register } => String::from(format!(
+                    "RAM[0x{:02X} + {}]",
+                    address,
+                    register.disassemble_human()
+                )),
+                _ => panic!(),
+            },
+            Value::AtAddressFromRegister { register } => {
+                String::from(format!("RAM[{}]", register.disassemble_human()))
+            }
+            Value::Pop => String::from("pop value from stack"),
+            Value::Peek => String::from("current stack value"),
+            Value::Push => String::from("push value to stack"),
+            _ => self.disassemble(),
         }
     }
 }
@@ -135,6 +167,92 @@ impl Disassemble for InstructionWithOperands {
                 NonBasicInstruction::Reserved => panic!(),
                 NonBasicInstruction::Jsr { .. } => {
                     String::from(format!("JSR {}", self.a.disassemble()))
+                }
+            },
+        }
+    }
+
+    fn disassemble_human(&self) -> String {
+        match self.instruction {
+            Instruction::Set { .. } => String::from(format!(
+                "{0} <- {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Add { .. } => String::from(format!(
+                "{0} <- {0} + {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Sub { .. } => String::from(format!(
+                "{0} <- {0} - {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Mul { .. } => String::from(format!(
+                "{0} <- {0} * {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Div { .. } => String::from(format!(
+                "{0} <- {0} / {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Mod { .. } => String::from(format!(
+                "{0} <- {0} % {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Shl { .. } => String::from(format!(
+                "{0} <- {0} << {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Shr { .. } => String::from(format!(
+                "{0} <- {0} >> {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::And { .. } => String::from(format!(
+                "{0} <- {0} & {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Bor { .. } => String::from(format!(
+                "{0} <- {0} | {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Xor { .. } => String::from(format!(
+                "{0} <- {0} ^ {1}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Ife { .. } => String::from(format!(
+                "execute next instruction if {} == {}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Ifn { .. } => String::from(format!(
+                "execute next instruction if {} != {}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Ifg { .. } => String::from(format!(
+                "execute next instruction if {} > {}",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::Ifb { .. } => String::from(format!(
+                "execute next instruction if ({} & {}) != 0",
+                self.a.disassemble_human(),
+                self.b.as_ref().unwrap().disassemble_human()
+            )),
+            Instruction::NonBasic(nbi) => match nbi {
+                NonBasicInstruction::Reserved => panic!(),
+                NonBasicInstruction::Jsr { .. } => {
+                    String::from(format!("jump to subroutine at {}", self.a.disassemble()))
                 }
             },
         }
