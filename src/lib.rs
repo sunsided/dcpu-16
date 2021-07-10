@@ -20,10 +20,6 @@ const NUM_RAM_WORDS: usize = 0x10000;
 // Stack pointer is initialized to 0xffff (for 0x10000 words of memory).
 const STACK_POINTER_INIT: usize = NUM_RAM_WORDS - 1;
 
-trait DurationCycles {
-    fn base_cycle_count(&self) -> usize;
-}
-
 /// A DCPU-16 emulator.
 pub struct DCPU16<'p> {
     /// RAM.

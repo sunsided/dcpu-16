@@ -1,5 +1,4 @@
 use crate::value::Value;
-use crate::DurationCycles;
 use std::fmt::Debug;
 use tracing::trace;
 
@@ -128,43 +127,6 @@ impl From<u16> for NonBasicInstruction {
             0x01 => NonBasicInstruction::Jsr { a },
             0x02..=0x3f => NonBasicInstruction::Reserved,
             _ => panic!(),
-        }
-    }
-}
-
-impl DurationCycles for Instruction {
-    fn base_cycle_count(&self) -> usize {
-        match self {
-            Self::NonBasic(op) => op.base_cycle_count(),
-            // SET, AND, BOR and XOR take 1 cycle, plus the cost of a and b.
-            Self::Set { a, b } => a.base_cycle_count() + b.base_cycle_count(),
-            Self::And { a, b } => a.base_cycle_count() + b.base_cycle_count(),
-            Self::Bor { a, b } => a.base_cycle_count() + b.base_cycle_count(),
-            Self::Xor { a, b } => a.base_cycle_count() + b.base_cycle_count(),
-            // ADD, SUB, MUL, SHR, and SHL take 2 cycles, plus the cost of a and b
-            Self::Add { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Sub { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Mul { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Shr { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Shl { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            // DIV and MOD take 3 cycles, plus the cost of a and b
-            Self::Div { a, b } => 3 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Mod { a, b } => 3 + a.base_cycle_count() + b.base_cycle_count(),
-            // IFE, IFN, IFG, IFB take 2 cycles, plus the cost of a and b,
-            // plus 1 if the test fails
-            Self::Ife { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Ifn { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Ifg { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Ifb { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
-        }
-    }
-}
-
-impl DurationCycles for NonBasicInstruction {
-    fn base_cycle_count(&self) -> usize {
-        match self {
-            Self::Reserved => 0,
-            Self::Jsr { a } => 2 + a.base_cycle_count(),
         }
     }
 }

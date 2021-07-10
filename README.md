@@ -51,112 +51,112 @@ It executes the program given in the [DCPU-16 Specification](docs/specification.
 When executed, the program output looks like this:
 
 ```
-dcpu16: Loaded 32 words of program data
-dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
-dcpu16: PC=0000:   7c01 0030 => Set { a: Register { register: A }, b: NextWordLiteral }
-dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000
-dcpu16: PC=0002:   7de1 1000 0020 => Set { a: AtAddressFromNextWord, b: NextWordLiteral }
-dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=FFFF O=0000
-dcpu16: PC=0005:   7803 1000 => Sub { a: Register { register: A }, b: AtAddressFromNextWord }
-dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=FFFF O=0000
-dcpu16: PC=0007:   c00d => Ifn { a: Register { register: A }, b: Literal { value: 16 } }
-dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000A SP=FFFF O=0000
-dcpu16: PC=000A:   a861 => Set { a: Register { register: I }, b: Literal { value: 10 } }
-dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000B SP=FFFF O=0000
-dcpu16: PC=000B:   7c01 2000 => Set { a: Register { register: A }, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 200a => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2009 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2008 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2007 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2006 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2005 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2004 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2003 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2002 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=0011 SP=FFFF O=0000
-dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000D SP=FFFF O=0000
-dcpu16: PC=000D:   2161 2001 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000F SP=FFFF O=0000
-dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0010 SP=FFFF O=0000
-dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0013 SP=FFFF O=0000
-dcpu16: PC=0013:   9031 => Set { a: Register { register: X }, b: Literal { value: 4 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0014 SP=FFFF O=0000
-dcpu16::instruction: Decoding non-basic instruction 7C10, opcode 01, value 1F
-dcpu16: PC=0014:   7c10 0018 => NonBasic(Jsr { a: NextWordLiteral })
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0018 SP=FFFE O=0000
-dcpu16: PC=0018:   9037 => Shl { a: Register { register: X }, b: Literal { value: 4 } }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0019 SP=FFFE O=0000
-dcpu16: PC=0019:   61c1 => Set { a: OfProgramCounter, b: Pop }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0016 SP=FFFF O=0000
-dcpu16: PC=0016:   7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
-dcpu16: PC=001A:   7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
-dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
-dcpu16: Crash loop detected at PC=001A - terminating
+ INFO dcpu16: Loaded 32 words of program data
+DEBUG dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
+DEBUG dcpu16: PC=0000:   7c01 0030 => Set { a: Register { register: A }, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000
+DEBUG dcpu16: PC=0002:   7de1 1000 0020 => Set { a: AtAddressFromNextWord, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=FFFF O=0000
+DEBUG dcpu16: PC=0005:   7803 1000 => Sub { a: Register { register: A }, b: AtAddressFromNextWord }
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=FFFF O=0000
+DEBUG dcpu16: PC=0007:   c00d => Ifn { a: Register { register: A }, b: Literal { value: 16 } }
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000A SP=FFFF O=0000
+DEBUG dcpu16: PC=000A:   a861 => Set { a: Register { register: I }, b: Literal { value: 10 } }
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000B SP=FFFF O=0000
+DEBUG dcpu16: PC=000B:   7c01 2000 => Set { a: Register { register: A }, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 200a => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2009 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2008 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2007 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0007 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2006 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0006 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2005 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0005 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2004 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0004 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2003 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0003 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2002 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0002 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: PC=0011:   7dc1 000d => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: PC=000D:   2161 2001 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: PC=000F:   8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: PC=0010:   806d => Ifn { a: Register { register: I }, b: Literal { value: 0 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0013 SP=FFFF O=0000
+DEBUG dcpu16: PC=0013:   9031 => Set { a: Register { register: X }, b: Literal { value: 4 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0014 SP=FFFF O=0000
+TRACE dcpu16::instruction: Decoding non-basic instruction 7C10, opcode 01, value 1F
+DEBUG dcpu16: PC=0014:   7c10 0018 => NonBasic(Jsr { a: NextWordLiteral })
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0018 SP=FFFE O=0000
+DEBUG dcpu16: PC=0018:   9037 => Shl { a: Register { register: X }, b: Literal { value: 4 } }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0019 SP=FFFE O=0000
+DEBUG dcpu16: PC=0019:   61c1 => Set { a: OfProgramCounter, b: Pop }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0016 SP=FFFF O=0000
+DEBUG dcpu16: PC=0016:   7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
+DEBUG dcpu16: PC=001A:   7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
+ WARN dcpu16: Crash loop detected at PC=001A - terminating
 ```
 
 After the execution, the `X` register contains the word `0040` as expected (see the
