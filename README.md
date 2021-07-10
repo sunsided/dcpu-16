@@ -10,12 +10,35 @@ original website (as is the entire website), can be obtained from the [Wayback M
 
 Cycle counts are currently not emulated.
 
+## Example use
+
+See [examples/sample.rs] for a commented example application. Here's an example use:
+
+```rust
+use dcpu16::{Register, DCPU16};
+
+fn main() {
+    let program = [
+        0x7c01, 0x0030, 0x7de1, 0x1000, 0x0020, 0x7803, 0x1000, 0xc00d, 0x7dc1, 0x001a, 0xa861,
+        0x7c01, 0x2000, 0x2161, 0x2000, 0x8463, 0x806d, 0x7dc1, 0x000d, 0x9031, 0x7c10, 0x0018,
+        0x7dc1, 0x001a, 0x9037, 0x61c1, 0x7dc1, 0x001a, 0x0000, 0x0000, 0x0000, 0x0000,
+    ];
+
+    let mut cpu = DCPU16::new(&program);
+    while cpu.step() {}
+
+    assert_eq!(cpu.program_counter, 0x001A);
+    assert_eq!(cpu.register(Register::A), 0x2000);
+    assert_eq!(cpu.register(Register::X), 0x40);
+}
+```
+
 ## Example program execution
 
 The example program can be started with
 
 ```console
-cargo run --example sample
+RUST_LOG=sample=trace,dcpu16=trace cargo run --example sample
 ```
 
 It executes the program given in the [DCPU-16 Specification](docs/specification.txt):
@@ -165,3 +188,4 @@ After the execution, the `X` register contains the word `0040` as expected (see 
 [0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c
 [DCPU-16 Specification]: docs/specification.txt
 [Wayback Machine]: http://web.archive.org/web/20120504005858/http://0x10c.com/doc/dcpu-16.txt
+[examples/sample.rs]: examples/sample.rs

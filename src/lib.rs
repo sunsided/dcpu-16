@@ -66,6 +66,12 @@ impl<'p> DCPU16<'p> {
         self.registers[register as usize]
     }
 
+    /// Executes the program until a crash loop is detected.
+    pub fn run(&mut self) {
+        while self.step() {}
+    }
+
+    /// Executes a single instruction of the program.
     pub fn step(&mut self) -> bool {
         self.previous_program_counter = self.program_counter;
         let instruction = self.read_instruction();
