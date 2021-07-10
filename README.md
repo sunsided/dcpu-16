@@ -4,7 +4,7 @@ An emulator for the DCPU-16 16-bit processor described for the
 [0x10<sup>c</sup>] video game.
 
 The [DCPU-16 Specification](docs/specification.txt) is no longer available on the
-original website (as is the entire website), can be obtained from the [Wayback Machine].
+original website (as is the entire website) but still can be obtained from the [Wayback Machine].
 
 ---
 
