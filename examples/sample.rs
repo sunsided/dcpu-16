@@ -1,4 +1,4 @@
-use dcpu16::DCPU16;
+use dcpu16::{Register, DCPU16};
 
 fn main() {
     // Configure based on RUST_LOG env var.
@@ -16,4 +16,8 @@ fn main() {
             break;
         }
     }
+
+    assert_eq!(cpu.program_counter, 0x001A);
+    assert_eq!(cpu.register(Register::A), 0x2000);
+    assert_eq!(cpu.register(Register::X), 0x40);
 }

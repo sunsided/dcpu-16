@@ -5,14 +5,14 @@ use crate::{Word, DCPU16};
 use std::fmt::{Debug, Formatter};
 
 pub struct ResolvedValue {
-    value: Value,
-    pub address: Address,
-    pub value_at_address: Word,
+    value_type: Value,
+    pub value_address: Address,
+    pub resolved_value: Word,
 }
 
 impl ResolvedValue {
     pub fn unpack(&self) -> (Address, Word) {
-        (self.address, self.value_at_address)
+        (self.value_address, self.resolved_value)
     }
 }
 
@@ -57,9 +57,9 @@ impl InstructionWithOperands {
             word,
             instruction,
             a: ResolvedValue {
-                value: lhs_value,
-                address: lhs_addr,
-                value_at_address: lhs,
+                value_type: lhs_value,
+                value_address: lhs_addr,
+                resolved_value: lhs,
             },
             b: None,
         }
@@ -80,14 +80,14 @@ impl InstructionWithOperands {
             word,
             instruction,
             a: ResolvedValue {
-                value: lhs_value,
-                address: lhs_addr,
-                value_at_address: lhs,
+                value_type: lhs_value,
+                value_address: lhs_addr,
+                resolved_value: lhs,
             },
             b: Some(ResolvedValue {
-                value: rhs_value,
-                address: rhs_addr,
-                value_at_address: rhs,
+                value_type: rhs_value,
+                value_address: rhs_addr,
+                resolved_value: rhs,
             }),
         }
     }
@@ -105,10 +105,15 @@ impl Debug for InstructionWithOperands {
         if self.len() == 1 {
             write!(f, "{:04x?} => {:?}", self.word, self.instruction)
         } else if self.len() == 2 {
-            let second_word = if self.a.value.len() == 1 {
-                self.a.address.get_literal().unwrap()
+            let second_word = if self.a.value_type.len() == 1 {
+                self.a.value_address.get_literal().unwrap()
             } else {
-                self.b.as_ref().unwrap().address.get_literal().unwrap()
+                self.b
+                    .as_ref()
+                    .unwrap()
+                    .value_address
+                    .get_literal()
+                    .unwrap()
             };
             write!(
                 f,
@@ -116,14 +121,19 @@ impl Debug for InstructionWithOperands {
                 self.word, second_word, self.instruction
             )
         } else {
-            assert_eq!(self.a.value.len(), 1);
-            assert_eq!(self.b.as_ref().unwrap().value.len(), 1);
+            assert_eq!(self.a.value_type.len(), 1);
+            assert_eq!(self.b.as_ref().unwrap().value_type.len(), 1);
             write!(
                 f,
                 "{:04x?} {:04x?} {:04x?} => {:?}",
                 self.word,
-                self.a.address.get_literal().unwrap(),
-                self.b.as_ref().unwrap().address.get_literal().unwrap(),
+                self.a.value_address.get_literal().unwrap(),
+                self.b
+                    .as_ref()
+                    .unwrap()
+                    .value_address
+                    .get_literal()
+                    .unwrap(),
                 self.instruction
             )
         }

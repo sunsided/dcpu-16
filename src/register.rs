@@ -1,5 +1,6 @@
 use crate::Word;
 
+/// Identifier for a CPU register.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
     A = 0,

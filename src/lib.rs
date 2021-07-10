@@ -7,7 +7,7 @@ mod value;
 use crate::address::Address;
 use crate::instruction::{Instruction, NonBasicInstruction};
 use crate::instruction_with_operands::InstructionWithOperands;
-use crate::register::Register;
+pub use crate::register::Register;
 use crate::value::Value;
 use std::ops::{BitAnd, BitOr, BitXor};
 use tracing::{debug, info, trace, warn};
@@ -31,15 +31,15 @@ pub struct DCPU16<'p> {
     /// Registers.
     registers: [Word; NUM_REGISTERS],
     /// Program counter.
-    program_counter: Word,
+    pub program_counter: Word,
     /// Program counter location of the last step.
     ///
     /// This value is used to determine a "crash loop" (a jump to the same instruction).
     previous_program_counter: Word,
     /// Stack pointer.
-    stack_pointer: Word,
+    pub stack_pointer: Word,
     /// Overflow.
-    overflow: Word,
+    pub overflow: Word,
     /// The program
     program: &'p [u16],
 }
@@ -65,6 +65,11 @@ impl<'p> DCPU16<'p> {
         cpu
     }
 
+    /// Gets the value of the specified register.
+    pub fn register(&self, register: Register) -> Word {
+        self.registers[register as usize]
+    }
+
     pub fn step(&mut self) -> bool {
         self.previous_program_counter = self.program_counter;
         let instruction = self.read_instruction();
@@ -75,6 +80,8 @@ impl<'p> DCPU16<'p> {
             instruction = instruction
         );
 
+        let instruction = instruction;
+
         match instruction.instruction {
             Instruction::NonBasic(nbi) => match nbi {
                 NonBasicInstruction::Reserved => panic!(),
@@ -82,13 +89,13 @@ impl<'p> DCPU16<'p> {
                     assert!(instruction.b.is_none());
                     self.stack_pointer -= 1;
                     self.ram[self.stack_pointer as usize] = self.program_counter;
-                    self.program_counter = instruction.a.value_at_address;
+                    self.program_counter = instruction.a.resolved_value;
                 }
             },
             Instruction::Set { .. } => {
                 self.store_value(
-                    instruction.a.address,
-                    instruction.b.unwrap().value_at_address,
+                    instruction.a.value_address,
+                    instruction.b.unwrap().resolved_value,
                 );
             }
             Instruction::Add { .. } => {
@@ -167,29 +174,29 @@ impl<'p> DCPU16<'p> {
                 self.store_value(a, result);
             }
             Instruction::Ife { .. } => {
-                let lhs = instruction.a.value_at_address;
-                let rhs = instruction.b.unwrap().value_at_address;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs == rhs) {
                     self.skip_instruction()
                 }
             }
             Instruction::Ifn { .. } => {
-                let lhs = instruction.a.value_at_address;
-                let rhs = instruction.b.unwrap().value_at_address;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs != rhs) {
                     self.skip_instruction()
                 }
             }
             Instruction::Ifg { .. } => {
-                let lhs = instruction.a.value_at_address;
-                let rhs = instruction.b.unwrap().value_at_address;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs > rhs) {
                     self.skip_instruction()
                 }
             }
             Instruction::Ifb { .. } => {
-                let lhs = instruction.a.value_at_address;
-                let rhs = instruction.b.unwrap().value_at_address;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs.bitor(rhs) != 0) {
                     self.skip_instruction()
                 }
@@ -203,7 +210,10 @@ impl<'p> DCPU16<'p> {
         // The comparison of the PC before the instruction was read and after
         // it was executed can be used as a naive heuristic for crash loop detection.
         if self.previous_program_counter == self.program_counter {
-            warn!("Crash loop detected - terminating");
+            warn!(
+                "Crash loop detected at PC={pc:04X} - terminating",
+                pc = self.program_counter
+            );
             return false;
         }
 
@@ -358,7 +368,7 @@ impl<'p> DCPU16<'p> {
                 let word = self.read_word_and_advance_pc();
                 Address::Literal(word)
             }
-            Value::Literal { value } => Address::Address(value),
+            Value::Literal { value } => Address::Literal(value),
         }
     }
 
