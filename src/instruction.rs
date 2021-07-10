@@ -1,5 +1,6 @@
 use crate::value::Value;
 use crate::DurationCycles;
+use std::fmt::{Debug, Formatter};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Instruction {
@@ -198,10 +199,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0001),
             Instruction::Set {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -213,10 +214,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0010),
             Instruction::Add {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -228,10 +229,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0011),
             Instruction::Sub {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -243,10 +244,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0100),
             Instruction::Mul {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -258,10 +259,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0101),
             Instruction::Div {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -273,10 +274,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0110),
             Instruction::Mod {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -288,10 +289,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_0111),
             Instruction::Shl {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -303,10 +304,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1000),
             Instruction::Shr {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -318,10 +319,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1001),
             Instruction::And {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -333,10 +334,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1010),
             Instruction::Bor {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -348,10 +349,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1011),
             Instruction::Xor {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -363,10 +364,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1100),
             Instruction::Ife {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -378,10 +379,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1101),
             Instruction::Ifn {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -393,10 +394,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1110),
             Instruction::Ifg {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }
@@ -408,10 +409,10 @@ mod tests {
         assert_eq!(
             Instruction::from(0b000011_000000_1111),
             Instruction::Ifb {
-                a: Value::InRegister {
+                a: Value::Register {
                     register: Register::A
                 },
-                b: Value::InRegister {
+                b: Value::Register {
                     register: Register::X
                 }
             }

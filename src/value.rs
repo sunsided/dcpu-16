@@ -3,7 +3,7 @@ use crate::{DurationCycles, Register, Word};
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Value {
     /// register (A, B, C, X, Y, Z, I or J, in that order)
-    InRegister {
+    Register {
         register: Register,
     },
     /// \[register\]
@@ -24,7 +24,7 @@ pub enum Value {
     OfProgramCounter,
     OfOverflow,
     /// \[next word\]
-    ValueAtAddressFromNextWord,
+    AtAddressFromNextWord,
     /// next word (literal)
     NextWordLiteral,
     /// literal value 0x00-0x1f (literal)
@@ -39,7 +39,7 @@ impl DurationCycles for Value {
         // The rest take 0 cycles.
         match self {
             Self::AtAddressFromNextWordPlusRegister { .. } => 1,
-            Self::ValueAtAddressFromNextWord { .. } => 1,
+            Self::AtAddressFromNextWord { .. } => 1,
             Self::NextWordLiteral { .. } => 1,
             _ => 0,
         }
@@ -50,7 +50,7 @@ impl From<u16> for Value {
     fn from(value: u16) -> Self {
         assert!(value < 0x40);
         match value {
-            0x00..=0x07 => Value::InRegister {
+            0x00..=0x07 => Value::Register {
                 register: Register::from(value),
             },
             0x08..=0x0f => Value::AtAddressFromRegister {
@@ -65,7 +65,7 @@ impl From<u16> for Value {
             0x1b => Value::OfStackPointer,
             0x1c => Value::OfProgramCounter,
             0x1d => Value::OfOverflow,
-            0x1e => Value::ValueAtAddressFromNextWord,
+            0x1e => Value::AtAddressFromNextWord,
             0x1f => Value::NextWordLiteral,
             0x20..=0x3f => Value::Literal {
                 value: value - 0x20,
@@ -83,19 +83,19 @@ mod tests {
     fn value_in_register_works() {
         assert_eq!(
             Value::from(0x00),
-            Value::InRegister {
+            Value::Register {
                 register: Register::A
             }
         );
         assert_eq!(
             Value::from(0x01),
-            Value::InRegister {
+            Value::Register {
                 register: Register::B
             }
         );
         assert_eq!(
             Value::from(0x07),
-            Value::InRegister {
+            Value::Register {
                 register: Register::J
             }
         );
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn value_next_word_works() {
-        assert_eq!(Value::from(0x1e), Value::ValueAtAddressFromNextWord);
+        assert_eq!(Value::from(0x1e), Value::AtAddressFromNextWord);
         assert_eq!(Value::from(0x1f), Value::NextWordLiteral);
     }
 
