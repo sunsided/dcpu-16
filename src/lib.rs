@@ -2,11 +2,12 @@ mod instruction;
 mod register;
 mod value;
 
-use crate::instruction::Instruction;
+use crate::instruction::{Instruction, NonBasicInstruction};
 use crate::register::Register;
 use crate::value::Value;
 use std::fmt::{Debug, Formatter};
 use std::ops::{BitAnd, BitOr, BitXor};
+use tracing::{debug, info, trace, warn};
 
 type Word = u16;
 
@@ -27,9 +28,13 @@ pub struct DCPU16<'p> {
     /// Registers.
     registers: [Word; NUM_REGISTERS],
     /// Program counter.
-    pc: Word,
+    program_counter: Word,
+    /// Program counter location of the last step.
+    ///
+    /// This value is used to determine a "crash loop" (a jump to the same instruction).
+    previous_program_counter: Word,
     /// Stack pointer.
-    sp: Word,
+    stack_pointer: Word,
     /// Overflow.
     overflow: Word,
     /// The program
@@ -41,14 +46,17 @@ enum Address {
     Register(Register),
     Literal(Word),
     Address(Word),
+    ProgramCounter,
+    StackPointer,
+    Overflow,
 }
 
 impl Address {
     fn get_literal(&self) -> Option<Word> {
         match self {
-            Self::Register(..) => None,
             Self::Literal(value) => Some(*value),
             Self::Address(value) => Some(*value),
+            _ => None,
         }
     }
 }
@@ -74,7 +82,14 @@ struct InstructionWithOperands {
 
 impl InstructionWithOperands {
     /// Uses the CPU's resolve method (which may advance the PC)
-    /// to look up an entire instruction.
+    /// to look up an entire instruction that takes one additional operands.
+    fn resolve_1op(cpu: &mut DCPU16, word: Word, instruction: Instruction, a: Value) -> Self {
+        let (lhs_addr, lhs) = cpu.resolve_address(a);
+        InstructionWithOperands::new_1op(word, instruction, a, lhs_addr, lhs)
+    }
+
+    /// Uses the CPU's resolve method (which may advance the PC)
+    /// to look up an entire instruction that takes two additional operands.
     fn resolve_2op(
         cpu: &mut DCPU16,
         word: Word,
@@ -85,6 +100,26 @@ impl InstructionWithOperands {
         let (lhs_addr, lhs) = cpu.resolve_address(a);
         let (rhs_addr, rhs) = cpu.resolve_address(b);
         InstructionWithOperands::new_2op(word, instruction, a, lhs_addr, lhs, b, rhs_addr, rhs)
+    }
+
+    /// Constructs a one-operand instruction.
+    fn new_1op(
+        word: Word,
+        instruction: Instruction,
+        lhs_value: Value,
+        lhs_addr: Address,
+        lhs: Word,
+    ) -> Self {
+        Self {
+            word,
+            instruction,
+            a: ResolvedValue {
+                value: lhs_value,
+                address: lhs_addr,
+                value_at_address: lhs,
+            },
+            b: None,
+        }
     }
 
     /// Constructs a two-operand instruction.
@@ -155,22 +190,44 @@ impl Debug for InstructionWithOperands {
 impl<'p> DCPU16<'p> {
     pub fn new(program: &'p [u16]) -> Self {
         assert!(program.len() < u16::MAX as usize);
-        Self {
+        let cpu = Self {
             ram: Box::new([0; NUM_RAM_WORDS]),
             registers: [0; NUM_REGISTERS],
-            pc: 0,
-            sp: STACK_POINTER_INIT as _,
+            program_counter: 0,
+            previous_program_counter: 0,
+            stack_pointer: STACK_POINTER_INIT as _,
             overflow: 0,
             program,
-        }
+        };
+
+        info!(
+            "Loaded {program_length} bytes words of program data",
+            program_length = program.len()
+        );
+        cpu.dump_state();
+        cpu
     }
 
     pub fn step(&mut self) -> bool {
-        let location = self.pc;
+        self.previous_program_counter = self.program_counter;
         let instruction = self.read_instruction();
-        println!("{:04X?}: {:?}", location, instruction);
+
+        debug!(
+            "PC={operation_pc:04X}:   {instruction:?}",
+            operation_pc = self.previous_program_counter,
+            instruction = instruction
+        );
 
         match instruction.instruction {
+            Instruction::NonBasic(nbi) => match nbi {
+                NonBasicInstruction::Reserved => panic!(),
+                NonBasicInstruction::Jsr { .. } => {
+                    assert!(instruction.b.is_none());
+                    self.stack_pointer -= 1;
+                    self.ram[self.stack_pointer as usize] = self.program_counter;
+                    self.program_counter = instruction.a.value_at_address;
+                }
+            },
             Instruction::Set { .. } => {
                 self.store_value(
                     instruction.a.address,
@@ -280,14 +337,20 @@ impl<'p> DCPU16<'p> {
                     self.skip_instruction()
                 }
             }
-            _ => panic!(),
         }
 
         // We print the state after the execution.
         self.dump_state();
-        println!();
 
-        (self.pc as usize) < self.program.len()
+        // An operation may mutate the program counter, e.g. `SET PC, POP`.
+        // The comparison of the PC before the instruction was read and after
+        // it was executed can be used as a naive heuristic for crash loop detection.
+        if self.previous_program_counter == self.program_counter {
+            warn!("Crash loop detected - terminating");
+            return false;
+        }
+
+        (self.program_counter as usize) < self.program.len()
     }
 
     fn read_instruction(&mut self) -> InstructionWithOperands {
@@ -296,6 +359,12 @@ impl<'p> DCPU16<'p> {
         assert!(instruction.len() >= 1);
 
         match instruction {
+            Instruction::NonBasic(nbi) => match nbi {
+                NonBasicInstruction::Reserved => panic!(),
+                NonBasicInstruction::Jsr { a } => {
+                    InstructionWithOperands::resolve_1op(self, instruction_word, instruction, a)
+                }
+            },
             Instruction::Set { a, b } => {
                 InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
             }
@@ -341,24 +410,23 @@ impl<'p> DCPU16<'p> {
             Instruction::Ifb { a, b } => {
                 InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
             }
-            _ => panic!(),
         }
     }
 
-    pub fn dump_state(&mut self) {
-        println!(
-            "A={:04X?} B={:04X?} C={:04X?} X={:04X?} Y={:04X?} Z={:04X?} I={:04X?} J={:04X?} PC⁎={:04X?} SP={:04X?} O={:04X?}",
-            self.registers[0],
-            self.registers[1],
-            self.registers[2],
-            self.registers[3],
-            self.registers[4],
-            self.registers[5],
-            self.registers[6],
-            self.registers[7],
-            self.pc,
-            self.sp,
-            self.overflow
+    pub fn dump_state(&self) {
+        debug!(
+            "Registers: A={a:04X?} B={b:04X?} C={c:04X?} X={x:04X?} Y={y:04X?} Z={z:04X?} I={i:04X?} J={j:04X?} PC⁎={pc:04X?} SP={sp:04X?} O={o:04X?}",
+            a=self.registers[0],
+            b=self.registers[1],
+            c=self.registers[2],
+            x=self.registers[3],
+            y=self.registers[4],
+            z=self.registers[5],
+            i=self.registers[6],
+            j=self.registers[7],
+            pc=self.program_counter,
+            sp=self.stack_pointer,
+            o=self.overflow
         );
     }
 
@@ -368,6 +436,9 @@ impl<'p> DCPU16<'p> {
             Address::Literal(value) => value,
             Address::Register(register) => self.registers[register as usize],
             Address::Address(address) => self.ram[address as usize],
+            Address::ProgramCounter => self.program_counter,
+            Address::StackPointer => self.stack_pointer,
+            Address::Overflow => self.overflow,
         }
     }
 
@@ -377,9 +448,18 @@ impl<'p> DCPU16<'p> {
             // Specification:
             // If any instruction tries to assign a literal value, the assignment fails silently.
             // Other than that, the instruction behaves as normal.
-            Address::Literal(_) => {}
+            Address::Literal(_) => {
+                trace!(
+                    "Skipping literal assignment of word {word:04X} to literal {literal:04X}",
+                    word = value,
+                    literal = address.get_literal().unwrap()
+                )
+            }
             Address::Register(register) => self.registers[register as usize] = value,
             Address::Address(address) => self.ram[address as usize] = value,
+            Address::ProgramCounter => self.program_counter = value,
+            Address::StackPointer => self.stack_pointer = value,
+            Address::Overflow => self.overflow = value,
         }
     }
 
@@ -403,18 +483,18 @@ impl<'p> DCPU16<'p> {
                 Address::Address(word + register)
             }
             Value::Pop => {
-                let address = self.sp;
-                self.sp += 1;
+                let address = self.stack_pointer;
+                self.stack_pointer += 1;
                 Address::Address(address)
             }
-            Value::Peek => Address::Address(self.sp),
+            Value::Peek => Address::Address(self.stack_pointer),
             Value::Push => {
-                self.sp -= 1;
-                Address::Address(self.sp)
+                self.stack_pointer -= 1;
+                Address::Address(self.stack_pointer)
             }
-            Value::OfStackPointer => Address::Literal(self.sp),
-            Value::OfProgramCounter => Address::Literal(self.pc),
-            Value::OfOverflow => Address::Literal(self.overflow),
+            Value::OfStackPointer => Address::StackPointer,
+            Value::OfProgramCounter => Address::ProgramCounter,
+            Value::OfOverflow => Address::Overflow,
             Value::AtAddressFromNextWord => {
                 let word = self.read_word_and_advance_pc();
                 Address::Address(word)
@@ -429,15 +509,16 @@ impl<'p> DCPU16<'p> {
 
     /// Reads the value at the current program counter and advances the program counter.
     fn read_word_and_advance_pc(&mut self) -> u16 {
-        let value = self.program[self.pc as usize];
-        self.pc += 1;
+        let value = self.program[self.program_counter as usize];
+        self.program_counter += 1;
         value
     }
 
     /// Skips the next instruction.
     fn skip_instruction(&mut self) {
-        // For this to work we need to skip up to three words, depending on the actual instruction.
-        panic!()
-        // self.read_word_and_advance_pc();
+        // Since the read_instruction() function reads the entire instruction including
+        // its arguments, executing it here ensures we're skipping over the correct
+        // amount of words.
+        let _ = self.read_instruction();
     }
 }

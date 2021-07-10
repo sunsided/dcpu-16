@@ -1,6 +1,7 @@
 use crate::value::Value;
 use crate::DurationCycles;
 use std::fmt::Debug;
+use tracing::trace;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Instruction {
@@ -112,7 +113,16 @@ impl From<u16> for NonBasicInstruction {
     fn from(value: u16) -> NonBasicInstruction {
         assert_eq!(value & 0b1111, 0x0);
         let opcode = (value >> 4) & 0b111_111;
-        let a = Value::from((value >> 10) & 0b111_111);
+        let a_word = (value >> 10) & 0b111_111;
+        let a = Value::from(a_word);
+
+        trace!(
+            "Decoding non-basic instruction {instruction:04X}, opcode {opcode:02X}, value {value:02X}",
+            instruction = value,
+            opcode = opcode,
+            value = a_word
+        );
+
         match opcode {
             0x00 => NonBasicInstruction::Reserved,
             0x01 => NonBasicInstruction::Jsr { a },

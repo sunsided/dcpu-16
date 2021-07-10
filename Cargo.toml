@@ -10,3 +10,7 @@ name = "sample"
 path = "examples/sample.rs"
 
 [dependencies]
+tracing = "0.1.26"
+
+[dev-dependencies]
+tracing-subscriber = "0.2.18"

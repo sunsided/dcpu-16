@@ -11,7 +11,7 @@ is not yet implemented.
 The example program can be started with
 
 ```console
-$ cargo run --example sample
+$ RUST_LOG=sample=trace,dcpu16=trace cargo run --example sample
 ```
 
 It executes the program given in the [Specification](docs/specification.txt):
@@ -44,36 +44,22 @@ It executes the program given in the [Specification](docs/specification.txt):
 :crash        SET PC, crash            ; 7dc1 001a [*]
 ```
 
-When executing, the program outputs the following:
+When executed, the program output looks like this:
 
 ```
-Initial state:
-A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
-
-0000: 7c01 0030 => Set { a: Register { register: A }, b: NextWordLiteral }
-A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000
-
-0002: 7de1 1000 0020 => Set { a: AtAddressFromNextWord, b: NextWordLiteral }
-A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=FFFF O=0000
-
-0005: 7803 1000 => Sub { a: Register { register: A }, b: AtAddressFromNextWord }
-A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=FFFF O=0000
-
-0007: c00d => Ifn { a: Register { register: A }, b: Literal { value: 16 } }
-A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0008 SP=FFFF O=0000
-
-0008: 7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
-A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000A SP=FFFF O=0000
-
-000A: a861 => Set { a: Register { register: I }, b: Literal { value: 10 } }
-A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000B SP=FFFF O=0000
-
-000B: 7c01 2000 => Set { a: Register { register: A }, b: NextWordLiteral }
-A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000D SP=FFFF O=0000
-
-000D: 2161 2000 => Set { a: AtAddressFromNextWordPlusRegister { register: I }, b: AtAddressFromRegister { register: A } }
-A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000F SP=FFFF O=0000
-
-000F: 8463 => Sub { a: Register { register: I }, b: Literal { value: 1 } }
-A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0010 SP=FFFF O=0000
+Jul 10 17:05:45.852  INFO dcpu16: Loaded 32 bytes words of program data
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
+Jul 10 17:05:45.852 DEBUG dcpu16: PC=0000:   7c01 0030 => Set { a: Register { register: A }, b: NextWordLiteral }
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000
+Jul 10 17:05:45.852 DEBUG dcpu16: PC=0002:   7de1 1000 0020 => Set { a: AtAddressFromNextWord, b: NextWordLiteral }
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=FFFF O=0000
+Jul 10 17:05:45.852 DEBUG dcpu16: PC=0005:   7803 1000 => Sub { a: Register { register: A }, b: AtAddressFromNextWord }
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=FFFF O=0000
+Jul 10 17:05:45.852 DEBUG dcpu16: PC=0007:   c00d => Ifn { a: Register { register: A }, b: Literal { value: 16 } }
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0008 SP=FFFF O=0000
+Jul 10 17:05:45.852 DEBUG dcpu16: PC=0008:   7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
+Jul 10 17:05:45.852 DEBUG dcpu16: PC=001A:   7dc1 001a => Set { a: OfProgramCounter, b: NextWordLiteral }
+Jul 10 17:05:45.852 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
+Jul 10 17:05:45.852  WARN dcpu16: Crash loop detected - terminating
 ```
