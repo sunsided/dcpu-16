@@ -13,7 +13,7 @@ assembler, i.e., the program must be provided as bytecode.
 
 ## Example use
 
-See [examples/sample.rs] for a commented example application. Here's an example use:
+See [examples/sample.rs] for a commented example application. Here's a sneak peek:
 
 ```rust
 use dcpu16::{Register, DCPU16};
