@@ -6,6 +6,7 @@ pub enum Address {
     Register(Register),
     Literal(Word),
     Address(Word),
+    AddressOffset { address: Word, register: Register },
     ProgramCounter,
     StackPointer,
     Overflow,
@@ -16,6 +17,10 @@ impl Address {
         match self {
             Self::Literal(value) => Some(*value),
             Self::Address(value) => Some(*value),
+            Self::AddressOffset {
+                address,
+                register: _,
+            } => Some(*address),
             _ => None,
         }
     }

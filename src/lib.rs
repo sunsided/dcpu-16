@@ -1,10 +1,12 @@
 mod address;
+mod disassemble;
 mod instruction;
 mod instruction_with_operands;
 mod register;
 mod value;
 
 use crate::address::Address;
+use crate::disassemble::Disassemble;
 use crate::instruction::{Instruction, NonBasicInstruction};
 use crate::instruction_with_operands::InstructionWithOperands;
 pub use crate::register::Register;
@@ -82,6 +84,7 @@ impl<'p> DCPU16<'p> {
             instruction = instruction
         );
 
+        // Helper for breakpoints.
         let instruction = instruction;
 
         match instruction.instruction {
@@ -303,6 +306,10 @@ impl<'p> DCPU16<'p> {
             Address::Literal(value) => value,
             Address::Register(register) => self.registers[register as usize],
             Address::Address(address) => self.ram[address as usize],
+            Address::AddressOffset { address, register } => {
+                let register_value = self.registers[register as usize];
+                self.ram[address as usize + register_value as usize]
+            }
             Address::ProgramCounter => self.program_counter,
             Address::StackPointer => self.stack_pointer,
             Address::Overflow => self.overflow,
@@ -324,6 +331,10 @@ impl<'p> DCPU16<'p> {
             }
             Address::Register(register) => self.registers[register as usize] = value,
             Address::Address(address) => self.ram[address as usize] = value,
+            Address::AddressOffset { address, register } => {
+                let register_value = self.registers[register as usize];
+                self.ram[address as usize + register_value as usize] = value
+            }
             Address::ProgramCounter => self.program_counter = value,
             Address::StackPointer => self.stack_pointer = value,
             Address::Overflow => self.overflow = value,
@@ -345,9 +356,8 @@ impl<'p> DCPU16<'p> {
                 Address::Address(self.registers[register as usize])
             }
             Value::AtAddressFromNextWordPlusRegister { register } => {
-                let word = self.read_word_and_advance_pc();
-                let register = self.registers[register as usize];
-                Address::Address(word + register)
+                let address = self.read_word_and_advance_pc();
+                Address::AddressOffset { address, register }
             }
             Value::Pop => {
                 let address = self.stack_pointer;

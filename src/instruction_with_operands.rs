@@ -1,11 +1,12 @@
 use crate::address::Address;
+use crate::disassemble::Disassemble;
 use crate::instruction::Instruction;
 use crate::value::Value;
 use crate::{Word, DCPU16};
 use std::fmt::{Debug, Formatter};
 
 pub struct ResolvedValue {
-    value_type: Value,
+    pub value_type: Value,
     pub value_address: Address,
     pub resolved_value: Word,
 }
@@ -103,7 +104,13 @@ impl Debug for InstructionWithOperands {
         assert!(self.len() >= 1 && self.len() <= 3);
 
         if self.len() == 1 {
-            write!(f, "{:04x?} => {:?}", self.word, self.instruction)
+            write!(
+                f,
+                "{:04x?} ; {} => {:?}",
+                self.word,
+                self.disassemble(),
+                self.instruction
+            )
         } else if self.len() == 2 {
             let second_word = if self.a.value_type.len() == 1 {
                 self.a.value_address.get_literal().unwrap()
@@ -117,15 +124,18 @@ impl Debug for InstructionWithOperands {
             };
             write!(
                 f,
-                "{:04x?} {:04x?} => {:?}",
-                self.word, second_word, self.instruction
+                "{:04x?} {:04x?} ; {} => {:?}",
+                self.word,
+                second_word,
+                self.disassemble(),
+                self.instruction
             )
         } else {
             assert_eq!(self.a.value_type.len(), 1);
             assert_eq!(self.b.as_ref().unwrap().value_type.len(), 1);
             write!(
                 f,
-                "{:04x?} {:04x?} {:04x?} => {:?}",
+                "{:04x?} {:04x?} {:04x?} ; {} => {:?}",
                 self.word,
                 self.a.value_address.get_literal().unwrap(),
                 self.b
@@ -134,6 +144,7 @@ impl Debug for InstructionWithOperands {
                     .value_address
                     .get_literal()
                     .unwrap(),
+                self.disassemble(),
                 self.instruction
             )
         }
