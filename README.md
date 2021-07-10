@@ -25,7 +25,10 @@ fn main() {
     ];
 
     let mut cpu = DCPU16::new(&program);
-    while cpu.step() {}
+
+    // Use cpu.step() to step through each instruction.
+    // cpu.run() executes until a crash loop is detected.
+    cpu.run();
 
     assert_eq!(cpu.program_counter, 0x001A);
     assert_eq!(cpu.register(Register::A), 0x2000);
