@@ -1,12 +1,16 @@
 # DCPU-16 Emulator
 
 An emulator for the DCPU-16 16-bit processor described for the 
-<em>0x10<sup>c</sup></em> video game.
+[0x10<sup>c</sup>] video game.
 
-The current implementation is a work in progress; cycle count emulation 
-is not yet implemented.
+The [DCPU-16 Specification](docs/specification.txt) is no longer available on the
+original website (as is the entire website), can be obtained from the [Wayback Machine].
 
-## Example Output
+---
+
+Cycle counts are currently not emulated.
+
+## Example program execution
 
 The example program can be started with
 
@@ -158,4 +162,6 @@ Jul 10 17:26:47.452  WARN dcpu16: Crash loop detected at PC=001A - terminating
 After the execution, the `X` register contains the word `0040` as expected (see the
 [DCPU-16 Specification] for the example program).
 
+[0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c
 [DCPU-16 Specification]: docs/specification.txt
+[Wayback Machine]: http://web.archive.org/web/20120504005858/http://0x10c.com/doc/dcpu-16.txt
