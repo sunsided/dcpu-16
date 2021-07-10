@@ -51,7 +51,7 @@ It executes the program given in the [DCPU-16 Specification](docs/specification.
 When executed, the program output looks like this:
 
 ```
-dcpu16: Loaded 32 bytes words of program data
+dcpu16: Loaded 32 words of program data
 dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
 dcpu16: PC=0000:   7c01 0030 => Set { a: Register { register: A }, b: NextWordLiteral }
 dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000

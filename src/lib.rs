@@ -58,7 +58,7 @@ impl<'p> DCPU16<'p> {
         };
 
         info!(
-            "Loaded {program_length} bytes words of program data",
+            "Loaded {program_length} words of program data",
             program_length = program.len()
         );
         cpu.dump_state();
