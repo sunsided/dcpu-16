@@ -6,7 +6,6 @@ mod register;
 mod value;
 
 use crate::address::Address;
-use crate::disassemble::Disassemble;
 use crate::instruction::{Instruction, NonBasicInstruction};
 use crate::instruction_with_operands::InstructionWithOperands;
 pub use crate::register::Register;
@@ -83,9 +82,6 @@ impl<'p> DCPU16<'p> {
             operation_pc = self.previous_program_counter,
             instruction = instruction
         );
-
-        // Helper for breakpoints.
-        let instruction = instruction;
 
         match instruction.instruction {
             Instruction::NonBasic(nbi) => match nbi {
