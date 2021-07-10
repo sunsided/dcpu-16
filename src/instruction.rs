@@ -1,6 +1,6 @@
 use crate::value::Value;
 use crate::DurationCycles;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Instruction {

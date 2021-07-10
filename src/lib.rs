@@ -5,9 +5,8 @@ mod value;
 use crate::instruction::Instruction;
 use crate::register::Register;
 use crate::value::Value;
-use crate::Address::Literal;
 use std::fmt::{Debug, Formatter};
-use std::ops::{Add, BitAnd, BitOr, BitXor};
+use std::ops::{BitAnd, BitOr, BitXor};
 
 type Word = u16;
 
@@ -178,28 +177,28 @@ impl<'p> DCPU16<'p> {
                     instruction.b.unwrap().value_at_address,
                 );
             }
-            Instruction::Add { a, b } => {
+            Instruction::Add { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let (result, overflow) = lhs.overflowing_add(rhs);
                 self.overflow = if overflow { 0x0001 } else { 0x0 };
                 self.store_value(a, result);
             }
-            Instruction::Sub { a, b } => {
+            Instruction::Sub { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let (result, overflow) = lhs.overflowing_sub(rhs);
                 self.overflow = if overflow { 0xffff } else { 0x0 };
                 self.store_value(a, result);
             }
-            Instruction::Mul { a, b } => {
+            Instruction::Mul { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.wrapping_mul(rhs);
                 self.overflow = (((lhs as u32 * rhs as u32) >> 16) & 0xffff) as _;
                 self.store_value(a, result);
             }
-            Instruction::Div { a, b } => {
+            Instruction::Div { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 if rhs > 0 {
@@ -211,7 +210,7 @@ impl<'p> DCPU16<'p> {
                     self.store_value(a, 0);
                 }
             }
-            Instruction::Mod { a, b } => {
+            Instruction::Mod { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 if rhs > 0 {
@@ -221,60 +220,60 @@ impl<'p> DCPU16<'p> {
                     self.store_value(a, 0);
                 }
             }
-            Instruction::Shl { a, b } => {
+            Instruction::Shl { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs << rhs;
                 self.overflow = ((((lhs as u32) << (rhs as u32)) >> 16) & 0xffff) as u16;
                 self.store_value(a, result);
             }
-            Instruction::Shr { a, b } => {
+            Instruction::Shr { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs >> rhs;
                 self.overflow = ((((lhs as u32) << 16) >> (rhs as u32)) & 0xffff) as u16;
                 self.store_value(a, result);
             }
-            Instruction::And { a, b } => {
+            Instruction::And { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.bitand(rhs);
                 self.store_value(a, result);
             }
-            Instruction::Bor { a, b } => {
+            Instruction::Bor { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.bitor(rhs);
                 self.store_value(a, result);
             }
-            Instruction::Xor { a, b } => {
+            Instruction::Xor { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.bitxor(rhs);
                 self.store_value(a, result);
             }
-            Instruction::Ife { a, b } => {
+            Instruction::Ife { .. } => {
                 let lhs = instruction.a.value_at_address;
                 let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs == rhs) {
                     self.skip_instruction()
                 }
             }
-            Instruction::Ifn { a, b } => {
+            Instruction::Ifn { .. } => {
                 let lhs = instruction.a.value_at_address;
                 let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs != rhs) {
                     self.skip_instruction()
                 }
             }
-            Instruction::Ifg { a, b } => {
+            Instruction::Ifg { .. } => {
                 let lhs = instruction.a.value_at_address;
                 let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs > rhs) {
                     self.skip_instruction()
                 }
             }
-            Instruction::Ifb { a, b } => {
+            Instruction::Ifb { .. } => {
                 let lhs = instruction.a.value_at_address;
                 let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs.bitor(rhs) != 0) {

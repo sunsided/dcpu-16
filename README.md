@@ -3,6 +3,9 @@
 An emulator for the DCPU-16 16-bit processor described for the 
 <em>0x10<sup>c</sup></em> video game.
 
+The current implementation is a work in progress; cycle count emulation 
+is not yet implemented.
+
 ## Example Output
 
 The example program can be started with
