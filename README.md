@@ -8,7 +8,8 @@ original website (as is the entire website), can be obtained from the [Wayback M
 
 ---
 
-Cycle counts are currently not emulated.
+Cycle counts are currently not emulated. This project also does not contain an
+assembler, i.e., the program must be provided as bytecode. 
 
 ## Example use
 
