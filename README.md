@@ -186,8 +186,7 @@ DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000
  WARN dcpu16: Crash loop detected at PC=001A - terminating
 ```
 
-After the execution, the `X` register contains the word `0040` as expected (see the
-[DCPU-16 Specification] for the example program).
+After the execution, the `X` register contains the word `0040` as expected (by the specification).
 
 [0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c
 [DCPU-16 Specification]: docs/specification.txt
