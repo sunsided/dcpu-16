@@ -8,6 +8,10 @@ fn main() {
     ];
 
     let mut cpu = DCPU16::new(&program);
+    println!("Initial state:");
+    cpu.dump_state();
+    println!();
+
     loop {
         if !cpu.step() {
             break;

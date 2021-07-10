@@ -33,6 +33,18 @@ pub enum Value {
     },
 }
 
+impl Value {
+    /// Gets the number of extra words to read.
+    pub fn len(&self) -> usize {
+        match self {
+            Self::AtAddressFromNextWordPlusRegister { .. } => 1,
+            Self::AtAddressFromNextWord => 1,
+            Self::NextWordLiteral => 1,
+            _ => 0,
+        }
+    }
+}
+
 impl DurationCycles for Value {
     fn base_cycle_count(&self) -> usize {
         // All values that read a word (0x10-0x17, 0x1e, and 0x1f) take 1 cycle to look up.
@@ -71,6 +83,25 @@ impl From<u16> for Value {
                 value: value - 0x20,
             },
             _ => panic!(),
+        }
+    }
+}
+
+impl From<Value> for u16 {
+    fn from(value: Value) -> u16 {
+        match value {
+            Value::Register { register } => 0x00 + register as Word,
+            Value::AtAddressFromRegister { register } => 0x08 + register as Word,
+            Value::AtAddressFromNextWordPlusRegister { register } => 0x10 + register as Word,
+            Value::Pop => 0x18,
+            Value::Peek => 0x19,
+            Value::Push => 0x1a,
+            Value::OfStackPointer => 0x1b,
+            Value::OfProgramCounter => 0x1c,
+            Value::OfOverflow => 0x1d,
+            Value::AtAddressFromNextWord => 0x1e,
+            Value::NextWordLiteral => 0x1f,
+            Value::Literal { value } => 0x20 + value,
         }
     }
 }

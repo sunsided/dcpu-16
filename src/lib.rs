@@ -6,6 +6,7 @@ use crate::instruction::Instruction;
 use crate::register::Register;
 use crate::value::Value;
 use crate::Address::Literal;
+use std::fmt::{Debug, Formatter};
 use std::ops::{Add, BitAnd, BitOr, BitXor};
 
 type Word = u16;
@@ -43,6 +44,115 @@ enum Address {
     Address(Word),
 }
 
+impl Address {
+    fn get_literal(&self) -> Option<Word> {
+        match self {
+            Self::Register(..) => None,
+            Self::Literal(value) => Some(*value),
+            Self::Address(value) => Some(*value),
+        }
+    }
+}
+
+struct ResolvedValue {
+    value: Value,
+    address: Address,
+    value_at_address: Word,
+}
+
+impl ResolvedValue {
+    fn unpack(&self) -> (Address, Word) {
+        (self.address, self.value_at_address)
+    }
+}
+
+struct InstructionWithOperands {
+    word: Word,
+    instruction: Instruction,
+    a: ResolvedValue,
+    b: Option<ResolvedValue>,
+}
+
+impl InstructionWithOperands {
+    /// Uses the CPU's resolve method (which may advance the PC)
+    /// to look up an entire instruction.
+    fn resolve_2op(
+        cpu: &mut DCPU16,
+        word: Word,
+        instruction: Instruction,
+        a: Value,
+        b: Value,
+    ) -> Self {
+        let (lhs_addr, lhs) = cpu.resolve_address(a);
+        let (rhs_addr, rhs) = cpu.resolve_address(b);
+        InstructionWithOperands::new_2op(word, instruction, a, lhs_addr, lhs, b, rhs_addr, rhs)
+    }
+
+    /// Constructs a two-operand instruction.
+    fn new_2op(
+        word: Word,
+        instruction: Instruction,
+        lhs_value: Value,
+        lhs_addr: Address,
+        lhs: Word,
+        rhs_value: Value,
+        rhs_addr: Address,
+        rhs: Word,
+    ) -> Self {
+        Self {
+            word,
+            instruction,
+            a: ResolvedValue {
+                value: lhs_value,
+                address: lhs_addr,
+                value_at_address: lhs,
+            },
+            b: Some(ResolvedValue {
+                value: rhs_value,
+                address: rhs_addr,
+                value_at_address: rhs,
+            }),
+        }
+    }
+
+    /// Gets the length of the instruction including all operands.
+    fn len(&self) -> usize {
+        self.instruction.len()
+    }
+}
+
+impl Debug for InstructionWithOperands {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        assert!(self.len() >= 1 && self.len() <= 3);
+
+        if self.len() == 1 {
+            write!(f, "{:04x?} => {:?}", self.word, self.instruction)
+        } else if self.len() == 2 {
+            let second_word = if self.a.value.len() == 1 {
+                self.a.address.get_literal().unwrap()
+            } else {
+                self.b.as_ref().unwrap().address.get_literal().unwrap()
+            };
+            write!(
+                f,
+                "{:04x?} {:04x?} => {:?}",
+                self.word, second_word, self.instruction
+            )
+        } else {
+            assert_eq!(self.a.value.len(), 1);
+            assert_eq!(self.b.as_ref().unwrap().value.len(), 1);
+            write!(
+                f,
+                "{:04x?} {:04x?} {:04x?} => {:?}",
+                self.word,
+                self.a.address.get_literal().unwrap(),
+                self.b.as_ref().unwrap().address.get_literal().unwrap(),
+                self.instruction
+            )
+        }
+    }
+}
+
 impl<'p> DCPU16<'p> {
     pub fn new(program: &'p [u16]) -> Self {
         assert!(program.len() < u16::MAX as usize);
@@ -57,41 +167,41 @@ impl<'p> DCPU16<'p> {
     }
 
     pub fn step(&mut self) -> bool {
-        let instruction_word = self.read_word_and_advance_pc();
-        let instruction = Instruction::from(instruction_word);
-        println!("{:04x?} {:?}", instruction_word, instruction);
-        self.dump_state();
+        let location = self.pc;
+        let instruction = self.read_instruction();
+        println!("{:04X?}: {:?}", location, instruction);
 
-        match instruction {
-            Instruction::Set { a, b } => {
-                let (a, _) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
-                self.store_value(a, rhs);
+        match instruction.instruction {
+            Instruction::Set { .. } => {
+                self.store_value(
+                    instruction.a.address,
+                    instruction.b.unwrap().value_at_address,
+                );
             }
             Instruction::Add { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let (result, overflow) = lhs.overflowing_add(rhs);
                 self.overflow = if overflow { 0x0001 } else { 0x0 };
                 self.store_value(a, result);
             }
             Instruction::Sub { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let (result, overflow) = lhs.overflowing_sub(rhs);
                 self.overflow = if overflow { 0xffff } else { 0x0 };
                 self.store_value(a, result);
             }
             Instruction::Mul { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.wrapping_mul(rhs);
                 self.overflow = (((lhs as u32 * rhs as u32) >> 16) & 0xffff) as _;
                 self.store_value(a, result);
             }
             Instruction::Div { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 if rhs > 0 {
                     let result = lhs.wrapping_div(rhs);
                     self.overflow = ((((lhs as u32) << 16) / (rhs as u32)) & 0xffff) as _;
@@ -102,8 +212,8 @@ impl<'p> DCPU16<'p> {
                 }
             }
             Instruction::Mod { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 if rhs > 0 {
                     let result = lhs % rhs;
                     self.store_value(a, result);
@@ -112,61 +222,61 @@ impl<'p> DCPU16<'p> {
                 }
             }
             Instruction::Shl { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs << rhs;
                 self.overflow = ((((lhs as u32) << (rhs as u32)) >> 16) & 0xffff) as u16;
                 self.store_value(a, result);
             }
             Instruction::Shr { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs >> rhs;
                 self.overflow = ((((lhs as u32) << 16) >> (rhs as u32)) & 0xffff) as u16;
                 self.store_value(a, result);
             }
             Instruction::And { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.bitand(rhs);
                 self.store_value(a, result);
             }
             Instruction::Bor { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.bitor(rhs);
                 self.store_value(a, result);
             }
             Instruction::Xor { a, b } => {
-                let (a, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.unwrap().unpack();
                 let result = lhs.bitxor(rhs);
                 self.store_value(a, result);
             }
             Instruction::Ife { a, b } => {
-                let (_, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let lhs = instruction.a.value_at_address;
+                let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs == rhs) {
                     self.skip_instruction()
                 }
             }
             Instruction::Ifn { a, b } => {
-                let (_, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let lhs = instruction.a.value_at_address;
+                let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs != rhs) {
                     self.skip_instruction()
                 }
             }
             Instruction::Ifg { a, b } => {
-                let (_, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let lhs = instruction.a.value_at_address;
+                let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs > rhs) {
                     self.skip_instruction()
                 }
             }
             Instruction::Ifb { a, b } => {
-                let (_, lhs) = self.resolve_address(a);
-                let (_, rhs) = self.resolve_address(b);
+                let lhs = instruction.a.value_at_address;
+                let rhs = instruction.b.unwrap().value_at_address;
                 if !(lhs.bitor(rhs) != 0) {
                     self.skip_instruction()
                 }
@@ -174,10 +284,69 @@ impl<'p> DCPU16<'p> {
             _ => panic!(),
         }
 
+        // We print the state after the execution.
+        self.dump_state();
+        println!();
+
         (self.pc as usize) < self.program.len()
     }
 
-    fn dump_state(&mut self) {
+    fn read_instruction(&mut self) -> InstructionWithOperands {
+        let instruction_word = self.read_word_and_advance_pc();
+        let instruction = Instruction::from(instruction_word);
+        assert!(instruction.len() >= 1);
+
+        match instruction {
+            Instruction::Set { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Add { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Sub { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Mul { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Div { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Mod { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Shl { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Shr { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::And { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Bor { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Xor { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Ife { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Ifn { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Ifg { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            Instruction::Ifb { a, b } => {
+                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
+            }
+            _ => panic!(),
+        }
+    }
+
+    pub fn dump_state(&mut self) {
         println!(
             "A={:04X?} B={:04X?} C={:04X?} X={:04X?} Y={:04X?} Z={:04X?} I={:04X?} J={:04X?} PC⁎={:04X?} SP={:04X?} O={:04X?}",
             self.registers[0],

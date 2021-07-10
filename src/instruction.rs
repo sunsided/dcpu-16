@@ -127,10 +127,10 @@ impl DurationCycles for Instruction {
         match self {
             Self::NonBasic(op) => op.base_cycle_count(),
             // SET, AND, BOR and XOR take 1 cycle, plus the cost of a and b.
-            Self::Set { a, b } => 1 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::And { a, b } => 1 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Bor { a, b } => 1 + a.base_cycle_count() + b.base_cycle_count(),
-            Self::Xor { a, b } => 1 + a.base_cycle_count() + b.base_cycle_count(),
+            Self::Set { a, b } => a.base_cycle_count() + b.base_cycle_count(),
+            Self::And { a, b } => a.base_cycle_count() + b.base_cycle_count(),
+            Self::Bor { a, b } => a.base_cycle_count() + b.base_cycle_count(),
+            Self::Xor { a, b } => a.base_cycle_count() + b.base_cycle_count(),
             // ADD, SUB, MUL, SHR, and SHL take 2 cycles, plus the cost of a and b
             Self::Add { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
             Self::Sub { a, b } => 2 + a.base_cycle_count() + b.base_cycle_count(),
@@ -155,6 +155,45 @@ impl DurationCycles for NonBasicInstruction {
         match self {
             Self::Reserved => 0,
             Self::Jsr { a } => 2 + a.base_cycle_count(),
+        }
+    }
+}
+
+impl Instruction {
+    /// Gets the length of the instruction in words.
+    pub fn len(&self) -> usize {
+        let len_from_values = match self {
+            Self::NonBasic(op) => op.len(),
+            Self::Set { a, b } => a.len() + b.len(),
+            Self::And { a, b } => a.len() + b.len(),
+            Self::Bor { a, b } => a.len() + b.len(),
+            Self::Xor { a, b } => a.len() + b.len(),
+            Self::Add { a, b } => a.len() + b.len(),
+            Self::Sub { a, b } => a.len() + b.len(),
+            Self::Mul { a, b } => a.len() + b.len(),
+            Self::Shr { a, b } => a.len() + b.len(),
+            Self::Shl { a, b } => a.len() + b.len(),
+            Self::Div { a, b } => a.len() + b.len(),
+            Self::Mod { a, b } => a.len() + b.len(),
+            Self::Ife { a, b } => a.len() + b.len(),
+            Self::Ifn { a, b } => a.len() + b.len(),
+            Self::Ifg { a, b } => a.len() + b.len(),
+            Self::Ifb { a, b } => a.len() + b.len(),
+        };
+
+        // We're adding one to count this instruction in.
+        1 + len_from_values
+    }
+}
+
+impl NonBasicInstruction {
+    /// Gets the length of the instruction in words.
+    pub fn len(&self) -> usize {
+        // Note that this operation is contained in the already loaded
+        // instruction, hence we do not add another offset.
+        match self {
+            Self::Reserved => 0,
+            Self::Jsr { a } => a.len(),
         }
     }
 }
