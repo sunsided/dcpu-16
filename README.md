@@ -45,7 +45,7 @@ fn main() {
 The example program can be started with
 
 ```console
-RUST_LOG=sample=trace,dcpu16=trace cargo run --example sample
+RUST_LOG=dcpu16=trace cargo run --example sample
 ```
 
 It executes the program given in the [DCPU-16 Specification](docs/specification.txt):
