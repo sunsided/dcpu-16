@@ -114,7 +114,7 @@ impl Debug for InstructionWithOperands {
         if self.length_in_words() == 1 {
             write!(
                 f,
-                "{:04x?} ; {} => {:?}",
+                "{:04x?} ; {} ({:?})",
                 self.raw_instruction,
                 self.disassemble(),
                 self.disassemble_human()
@@ -133,7 +133,7 @@ impl Debug for InstructionWithOperands {
             };
             write!(
                 f,
-                "{:04x?} {:04x?} ; {} => {:?}",
+                "{:04x?} {:04x?} ; {} ({:?})",
                 self.raw_instruction,
                 next_word,
                 self.disassemble(),
@@ -144,7 +144,7 @@ impl Debug for InstructionWithOperands {
             assert_eq!(self.b.expect("require second operand").argument_definition.num_extra_words(), 1);
             write!(
                 f,
-                "{:04x?} {:04x?} {:04x?} ; {} => {:?}",
+                "{:04x?} {:04x?} {:04x?} ; {} ({:?})",
                 self.raw_instruction,
                 self.a.expect("require first operand").argument.get_literal().unwrap(),
                 self.b
