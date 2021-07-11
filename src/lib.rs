@@ -29,16 +29,19 @@ pub struct DCPU16<'p> {
     registers: [Word; NUM_REGISTERS],
     /// Program counter.
     pub program_counter: Word,
-    /// Program counter location of the last step.
-    ///
-    /// This value is used to determine a "crash loop" (a jump to the same instruction).
-    previous_program_counter: Word,
     /// Stack pointer.
     pub stack_pointer: Word,
     /// Overflow.
     pub overflow: Word,
+
+    /// Program counter location of the last step.
+    ///
+    /// This value is used to determine a "crash loop" (a jump to the same instruction).
+    previous_program_counter: Word,
     /// The program
     program: &'p [u16],
+    /// Indicates whether the next instruction should be skipped.
+    skip_next_intruction: bool
 }
 
 impl<'p> DCPU16<'p> {
@@ -48,10 +51,11 @@ impl<'p> DCPU16<'p> {
             ram: Box::new([0; NUM_RAM_WORDS]),
             registers: [0; NUM_REGISTERS],
             program_counter: 0,
-            previous_program_counter: 0,
             stack_pointer: STACK_POINTER_INIT as _,
             overflow: 0,
             program,
+            previous_program_counter: 0,
+            skip_next_intruction: false
         };
 
         info!(
@@ -77,11 +81,43 @@ impl<'p> DCPU16<'p> {
         self.previous_program_counter = self.program_counter;
         let instruction = self.read_instruction();
 
+        if self.skip_next_intruction {
+            self.execute_skipped_instruction(instruction);
+        }
+        else {
+            if !self.execute_instruction(instruction) {
+                return false;
+            }
+        }
+
+        // We print the state after the execution.
+        self.dump_state();
+
+        if (self.program_counter as usize) < self.program.len() {
+            return true;
+        }
+
+        warn!("End of program reached - terminating");
+        false
+    }
+
+    /// "Executes" a skipped instruction.
+    fn execute_skipped_instruction(&mut self, instruction: InstructionWithOperands) {
         debug!(
-            "PC={operation_pc:04X}:   {instruction:?}",
-            operation_pc = self.previous_program_counter,
-            instruction = instruction
-        );
+                "SKIP {operation_pc:04X}: {instruction:?}",
+                operation_pc = self.previous_program_counter,
+                instruction = instruction
+            );
+        self.skip_next_intruction = false;
+    }
+
+    /// Executes an instruction.
+    fn execute_instruction(&mut self, instruction: InstructionWithOperands) -> bool {
+        debug!(
+                "EXEC {operation_pc:04X}: {instruction:?}",
+                operation_pc = self.previous_program_counter,
+                instruction = instruction
+            );
 
         match instruction.instruction {
             Instruction::NonBasic(nbi) => match nbi {
@@ -178,34 +214,31 @@ impl<'p> DCPU16<'p> {
                 let lhs = instruction.a.resolved_value;
                 let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs == rhs) {
-                    self.skip_instruction()
+                    self.skip_next_intruction = true;
                 }
             }
             Instruction::Ifn { .. } => {
                 let lhs = instruction.a.resolved_value;
                 let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs != rhs) {
-                    self.skip_instruction()
+                    self.skip_next_intruction = true;
                 }
             }
             Instruction::Ifg { .. } => {
                 let lhs = instruction.a.resolved_value;
                 let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs > rhs) {
-                    self.skip_instruction()
+                    self.skip_next_intruction = true;
                 }
             }
             Instruction::Ifb { .. } => {
                 let lhs = instruction.a.resolved_value;
                 let rhs = instruction.b.unwrap().resolved_value;
                 if !(lhs.bitor(rhs) != 0) {
-                    self.skip_instruction()
+                    self.skip_next_intruction = true;
                 }
             }
         }
-
-        // We print the state after the execution.
-        self.dump_state();
 
         // An operation may mutate the program counter, e.g. `SET PC, POP`.
         // The comparison of the PC before the instruction was read and after
@@ -218,15 +251,7 @@ impl<'p> DCPU16<'p> {
             return false;
         }
 
-        (self.program_counter as usize) < self.program.len()
-    }
-
-    /// Skips the next instruction.
-    fn skip_instruction(&mut self) {
-        // Since the read_instruction() function reads the entire instruction including
-        // its arguments, executing it here ensures we're skipping over the correct
-        // amount of words.
-        let _ = self.read_instruction();
+        true
     }
 
     fn read_instruction(&mut self) -> InstructionWithOperands {

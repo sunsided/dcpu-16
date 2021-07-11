@@ -87,56 +87,59 @@ The above program can be assembled into to the following bytecode:
 When executing the bytecode instructions, the program output looks like this:
 
 ```
- INFO dcpu16: Loaded 32 words of program data
+ INFO dcpu16: Loaded 28 words of program data
 DEBUG dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
-DEBUG dcpu16: PC=0000:   7c01 0030 ; SET A, 0x30 => "A <- 0x30"
+DEBUG dcpu16: EXEC 0000: 7c01 0030 ; SET A, 0x30 => "A <- 0x30"
 DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000
-DEBUG dcpu16: PC=0002:   7de1 1000 0020 ; SET [0x1000], 0x20 => "RAM[0x1000] <- 0x20"
+DEBUG dcpu16: EXEC 0002: 7de1 1000 0020 ; SET [0x1000], 0x20 => "RAM[0x1000] <- 0x20"
 DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=FFFF O=0000
-DEBUG dcpu16: PC=0005:   7803 1000 ; SUB A, [0x1000] => "A <- A - RAM[0x1000]"
+DEBUG dcpu16: EXEC 0005: 7803 1000 ; SUB A, [0x1000] => "A <- A - RAM[0x1000]"
 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=FFFF O=0000
-DEBUG dcpu16: PC=0007:   c00d ; IFN A, 0x10 => "execute next instruction if A != 0x10"
+DEBUG dcpu16: EXEC 0007: c00d ; IFN A, 0x10 => "execute next instruction if A != 0x10"
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0008 SP=FFFF O=0000
+DEBUG dcpu16: SKIP 0008: 7dc1 001a ; SET PC, 0x1A => "PC <- 0x1A"
 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000A SP=FFFF O=0000
-DEBUG dcpu16: PC=000A:   a861 ; SET I, 0x0A => "I <- 0x0A"
+DEBUG dcpu16: EXEC 000A: a861 ; SET I, 0x0A => "I <- 0x0A"
 DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000B SP=FFFF O=0000
-DEBUG dcpu16: PC=000B:   7c01 2000 ; SET A, 0x2000 => "A <- 0x2000"
+DEBUG dcpu16: EXEC 000B: 7c01 2000 ; SET A, 0x2000 => "A <- 0x2000"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000D SP=FFFF O=0000
-DEBUG dcpu16: PC=000D:   2161 2000 ; SET [0x2000+I], [A] => "RAM[0x2000 + I] <- RAM[A]"
+DEBUG dcpu16: EXEC 000D: 2161 2000 ; SET [0x2000+I], [A] => "RAM[0x2000 + I] <- RAM[A]"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000F SP=FFFF O=0000
-DEBUG dcpu16: PC=000F:   8463 ; SUB I, 0x01 => "I <- I - 0x01"
+DEBUG dcpu16: EXEC 000F: 8463 ; SUB I, 0x01 => "I <- I - 0x01"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0010 SP=FFFF O=0000
-DEBUG dcpu16: PC=0010:   806d ; IFN I, 0x00 => "execute next instruction if I != 0x00"
+DEBUG dcpu16: EXEC 0010: 806d ; IFN I, 0x00 => "execute next instruction if I != 0x00"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0011 SP=FFFF O=0000
-DEBUG dcpu16: PC=0011:   7dc1 000d ; SET PC, 0x0D => "PC <- 0x0D"
+DEBUG dcpu16: EXEC 0011: 7dc1 000d ; SET PC, 0x0D => "PC <- 0x0D"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000D SP=FFFF O=0000
-DEBUG dcpu16: PC=000D:   2161 2000 ; SET [0x2000+I], [A] => "RAM[0x2000 + I] <- RAM[A]"
+DEBUG dcpu16: EXEC 000D: 2161 2000 ; SET [0x2000+I], [A] => "RAM[0x2000 + I] <- RAM[A]"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000F SP=FFFF O=0000
-DEBUG dcpu16: PC=000F:   8463 ; SUB I, 0x01 => "I <- I - 0x01"
+DEBUG dcpu16: EXEC 000F: 8463 ; SUB I, 0x01 => "I <- I - 0x01"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0010 SP=FFFF O=0000
-DEBUG dcpu16: PC=0010:   806d ; IFN I, 0x00 => "execute next instruction if I != 0x00"
+DEBUG dcpu16: EXEC 0010: 806d ; IFN I, 0x00 => "execute next instruction if I != 0x00"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0011 SP=FFFF O=0000
-DEBUG dcpu16: PC=0011:   7dc1 000d ; SET PC, 0x0D => "PC <- 0x0D"
+DEBUG dcpu16: EXEC 0011: 7dc1 000d ; SET PC, 0x0D => "PC <- 0x0D"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000D SP=FFFF O=0000
 ... loop repeats ...
-DEBUG dcpu16: PC=000D:   2161 2000 ; SET [0x2000+I], [A] => "RAM[0x2000 + I] <- RAM[A]"
+DEBUG dcpu16: EXEC 000D: 2161 2000 ; SET [0x2000+I], [A] => "RAM[0x2000 + I] <- RAM[A]"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000F SP=FFFF O=0000
-DEBUG dcpu16: PC=000F:   8463 ; SUB I, 0x01 => "I <- I - 0x01"
+DEBUG dcpu16: EXEC 000F: 8463 ; SUB I, 0x01 => "I <- I - 0x01"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0010 SP=FFFF O=0000
-DEBUG dcpu16: PC=0010:   806d ; IFN I, 0x00 => "execute next instruction if I != 0x00"
+DEBUG dcpu16: EXEC 0010: 806d ; IFN I, 0x00 => "execute next instruction if I != 0x00"
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: SKIP 0011: 7dc1 000d ; SET PC, 0x0D => "PC <- 0x0D"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0013 SP=FFFF O=0000
-DEBUG dcpu16: PC=0013:   9031 ; SET X, 0x04 => "X <- 0x04"
+DEBUG dcpu16: EXEC 0013: 9031 ; SET X, 0x04 => "X <- 0x04"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0014 SP=FFFF O=0000
 TRACE dcpu16::instruction: Decoding non-basic instruction 7C10, opcode 01, value 1F
-DEBUG dcpu16: PC=0014:   7c10 0018 ; JSR 0x18 => "jump to subroutine at 0x18"
+DEBUG dcpu16: EXEC 0014: 7c10 0018 ; JSR 0x18 => "jump to subroutine at 0x18"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0018 SP=FFFE O=0000
-DEBUG dcpu16: PC=0018:   9037 ; SHL X, 0x04 => "X <- X << 0x04"
+DEBUG dcpu16: EXEC 0018: 9037 ; SHL X, 0x04 => "X <- X << 0x04"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0019 SP=FFFE O=0000
-DEBUG dcpu16: PC=0019:   61c1 ; SET PC, POP => "PC <- pop value from stack"
+DEBUG dcpu16: EXEC 0019: 61c1 ; SET PC, POP => "PC <- pop value from stack"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0016 SP=FFFF O=0000
-DEBUG dcpu16: PC=0016:   7dc1 001a ; SET PC, 0x1A => "PC <- 0x1A"
+DEBUG dcpu16: EXEC 0016: 7dc1 001a ; SET PC, 0x1A => "PC <- 0x1A"
 DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
-DEBUG dcpu16: PC=001A:   7dc1 001a ; SET PC, 0x1A => "PC <- 0x1A"
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
+DEBUG dcpu16: EXEC 001A: 7dc1 001a ; SET PC, 0x1A => "PC <- 0x1A"
  WARN dcpu16: Crash loop detected at PC=001A - terminating
 ```
 

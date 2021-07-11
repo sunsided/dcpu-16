@@ -1,7 +1,7 @@
 use dcpu16::{Register, DCPU16};
 
 fn main() {
-    // Use the RUST_LOG environment variable to configure, e.g. RUST_LOG=sample=trace,dcpu16=trace
+    // Use the RUST_LOG environment variable to configure, e.g. RUST_LOG=dcpu16=trace
     tracing_subscriber::fmt::init();
 
     let program = [
