@@ -28,4 +28,7 @@ fn main() {
     let ram = cpu.ram();
     assert_eq!(ram[0x1000], 0x20);
     assert_eq!(ram[0x2000 + 0x0A], ram[0x2000]);
+
+    // Print the RAM contents.
+    println!("{}", cpu.hexdump_ram(32));
 }

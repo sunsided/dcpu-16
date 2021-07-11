@@ -387,4 +387,30 @@ impl<'p> DCPU16<'p> {
             o=self.overflow
         );
     }
+
+    pub fn hexdump_ram(&self, words_per_row: usize) -> String {
+        assert!(words_per_row > 0);
+        debug_assert_eq!(NUM_RAM_WORDS, 65536);
+        let newline = String::from('\n');
+        let length_of_newline = newline.len();
+        debug_assert_eq!(length_of_newline, 1);
+
+        let row_length = (4 + 1) + (1 + 4) * words_per_row + length_of_newline;
+        let row_count = NUM_RAM_WORDS / words_per_row;
+        let expected_num_characters = row_length * row_count;
+
+        let mut dump = String::with_capacity(expected_num_characters);
+
+        for row in 0..row_count {
+            let row_start = row * words_per_row;
+            dump.push_str(format!("{:04X}:", row_start).as_str());
+            for word in 0..words_per_row {
+                dump.push_str(format!(" {:04X}", self.ram[row_start + word]).as_str());
+            }
+            dump.push_str(newline.as_str())
+        }
+
+        assert_eq!(dump.len(), expected_num_characters);
+        dump
+    }
 }
