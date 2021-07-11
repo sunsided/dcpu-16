@@ -1,5 +1,5 @@
-use crate::instruction::{InstructionWord, NonBasicInstruction};
-use crate::instruction_with_operands::{InstructionWithOperands, ResolvedValue};
+use crate::instruction_word::{InstructionWord, NonBasicInstruction};
+use crate::instruction::{InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition};
 use crate::Register;
 
@@ -89,83 +89,83 @@ impl Disassemble for InstructionWithOperands {
         match self.instruction {
             InstructionWord::Set { .. } => String::from(format!(
                 "SET {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Add { .. } => String::from(format!(
                 "ADD {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Sub { .. } => String::from(format!(
                 "SUB {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Mul { .. } => String::from(format!(
                 "MUL {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Div { .. } => String::from(format!(
                 "DIV {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Mod { .. } => String::from(format!(
                 "MOD {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Shl { .. } => String::from(format!(
                 "SHL {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Shr { .. } => String::from(format!(
                 "SHR {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::And { .. } => String::from(format!(
                 "AND {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Bor { .. } => String::from(format!(
                 "BOR {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Xor { .. } => String::from(format!(
                 "XOR {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Ife { .. } => String::from(format!(
                 "IFE {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Ifn { .. } => String::from(format!(
                 "IFN {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Ifg { .. } => String::from(format!(
                 "IFG {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::Ifb { .. } => String::from(format!(
                 "IFB {}, {}",
-                self.a.expect("require first operand").disassemble(),
-                self.b.expect("require second operand").disassemble()
+                self.a.disassemble(),
+                self.b.expect("require second argument").disassemble()
             )),
             InstructionWord::NonBasic(nbi) => match nbi {
                 NonBasicInstruction::Reserved => panic!(),
                 NonBasicInstruction::Jsr { .. } => {
-                    String::from(format!("JSR {}", self.a.expect("require first operand").disassemble()))
+                    String::from(format!("JSR {}", self.a.disassemble()))
                 }
             },
         }
@@ -175,83 +175,83 @@ impl Disassemble for InstructionWithOperands {
         match self.instruction {
             InstructionWord::Set { .. } => String::from(format!(
                 "{0} <- {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Add { .. } => String::from(format!(
                 "{0} <- {0} + {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Sub { .. } => String::from(format!(
                 "{0} <- {0} - {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Mul { .. } => String::from(format!(
                 "{0} <- {0} * {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Div { .. } => String::from(format!(
                 "{0} <- {0} / {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Mod { .. } => String::from(format!(
                 "{0} <- {0} % {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Shl { .. } => String::from(format!(
                 "{0} <- {0} << {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Shr { .. } => String::from(format!(
                 "{0} <- {0} >> {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::And { .. } => String::from(format!(
                 "{0} <- {0} & {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Bor { .. } => String::from(format!(
                 "{0} <- {0} | {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Xor { .. } => String::from(format!(
                 "{0} <- {0} ^ {1}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Ife { .. } => String::from(format!(
                 "execute next instruction if {} == {}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Ifn { .. } => String::from(format!(
                 "execute next instruction if {} != {}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Ifg { .. } => String::from(format!(
                 "execute next instruction if {} > {}",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::Ifb { .. } => String::from(format!(
                 "execute next instruction if ({} & {}) != 0",
-                self.a.expect("require first operand").disassemble_human(),
-                self.b.expect("require second operand").disassemble_human()
+                self.a.disassemble_human(),
+                self.b.expect("require second argument").disassemble_human()
             )),
             InstructionWord::NonBasic(nbi) => match nbi {
                 NonBasicInstruction::Reserved => panic!(),
                 NonBasicInstruction::Jsr { .. } => {
-                    String::from(format!("jump to subroutine at {}", self.a.expect("require first operand").disassemble()))
+                    String::from(format!("jump to subroutine at {}", self.a.disassemble()))
                 }
             },
         }

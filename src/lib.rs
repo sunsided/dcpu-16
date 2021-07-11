@@ -1,11 +1,11 @@
 mod disassemble;
+mod instruction_word;
 mod instruction;
-mod instruction_with_operands;
 mod register;
 mod instruction_argument;
 
-use crate::instruction::{Instruction, InstructionWord, NonBasicInstruction};
-use crate::instruction_with_operands::InstructionWithOperands;
+use crate::instruction_word::{InstructionWord, NonBasicInstruction};
+use crate::instruction::{InstructionWithOperands, Instruction};
 pub use crate::register::Register;
 use crate::instruction_argument::{InstructionArgumentDefinition, InstructionArgument};
 use std::ops::{BitAnd, BitOr, BitXor};
@@ -18,6 +18,12 @@ const NUM_RAM_WORDS: usize = 0x10000;
 
 // Stack pointer is initialized to 0xffff (for 0x10000 words of memory).
 const STACK_POINTER_INIT: usize = NUM_RAM_WORDS - 1;
+
+/// Decoding of instructions or values.
+trait Decode {
+    /// Decodes the specified word.
+    fn decode(value: Word) -> Self;
+}
 
 /// A DCPU-16 emulator.
 pub struct DCPU16<'p> {
@@ -134,39 +140,39 @@ impl<'p> DCPU16<'p> {
                     assert!(instruction.b.is_none());
                     self.stack_pointer -= 1;
                     self.ram[self.stack_pointer as usize] = self.program_counter;
-                    self.program_counter = instruction.a.expect("require value").resolved_value;
+                    self.program_counter = instruction.a.resolved_value;
                 }
             },
             InstructionWord::Set { .. } => {
                 self.store_value(
-                    instruction.a.expect("require first value").argument,
-                    instruction.b.expect("require second value").resolved_value,
+                    instruction.a.argument,
+                    instruction.b.expect("require second argument").resolved_value,
                 );
             }
             InstructionWord::Add { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let (result, overflow) = lhs.overflowing_add(rhs);
                 self.overflow = if overflow { 0x0001 } else { 0x0 };
                 self.store_value(a, result);
             }
             InstructionWord::Sub { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let (result, overflow) = lhs.overflowing_sub(rhs);
                 self.overflow = if overflow { 0xffff } else { 0x0 };
                 self.store_value(a, result);
             }
             InstructionWord::Mul { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let result = lhs.wrapping_mul(rhs);
                 self.overflow = (((lhs as u32 * rhs as u32) >> 16) & 0xffff) as _;
                 self.store_value(a, result);
             }
             InstructionWord::Div { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 if rhs > 0 {
                     let result = lhs.wrapping_div(rhs);
                     self.overflow = ((((lhs as u32) << 16) / (rhs as u32)) & 0xffff) as _;
@@ -177,8 +183,8 @@ impl<'p> DCPU16<'p> {
                 }
             }
             InstructionWord::Mod { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 if rhs > 0 {
                     let result = lhs % rhs;
                     self.store_value(a, result);
@@ -187,61 +193,61 @@ impl<'p> DCPU16<'p> {
                 }
             }
             InstructionWord::Shl { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let result = lhs << rhs;
                 self.overflow = ((((lhs as u32) << (rhs as u32)) >> 16) & 0xffff) as u16;
                 self.store_value(a, result);
             }
             InstructionWord::Shr { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let result = lhs >> rhs;
                 self.overflow = ((((lhs as u32) << 16) >> (rhs as u32)) & 0xffff) as u16;
                 self.store_value(a, result);
             }
             InstructionWord::And { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let result = lhs.bitand(rhs);
                 self.store_value(a, result);
             }
             InstructionWord::Bor { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let result = lhs.bitor(rhs);
                 self.store_value(a, result);
             }
             InstructionWord::Xor { .. } => {
-                let (a, lhs) = instruction.a.expect("require first value").unpack();
-                let (_, rhs) = instruction.b.expect("require second value").unpack();
+                let (a, lhs) = instruction.a.unpack();
+                let (_, rhs) = instruction.b.expect("require second argument").unpack();
                 let result = lhs.bitxor(rhs);
                 self.store_value(a, result);
             }
             InstructionWord::Ife { .. } => {
-                let lhs = instruction.a.expect("require first value").resolved_value;
-                let rhs = instruction.b.expect("require second value").resolved_value;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.expect("require second argument").resolved_value;
                 if !(lhs == rhs) {
                     self.skip_next_intruction = true;
                 }
             }
             InstructionWord::Ifn { .. } => {
-                let lhs = instruction.a.expect("require first value").resolved_value;
-                let rhs = instruction.b.expect("require second value").resolved_value;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.expect("require second argument").resolved_value;
                 if !(lhs != rhs) {
                     self.skip_next_intruction = true;
                 }
             }
             InstructionWord::Ifg { .. } => {
-                let lhs = instruction.a.expect("require first value").resolved_value;
-                let rhs = instruction.b.expect("require second value").resolved_value;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.expect("require second argument").resolved_value;
                 if !(lhs > rhs) {
                     self.skip_next_intruction = true;
                 }
             }
             InstructionWord::Ifb { .. } => {
-                let lhs = instruction.a.expect("require first value").resolved_value;
-                let rhs = instruction.b.expect("require second value").resolved_value;
+                let lhs = instruction.a.resolved_value;
+                let rhs = instruction.b.expect("require second argument").resolved_value;
                 if !(lhs.bitor(rhs) != 0) {
                     self.skip_next_intruction = true;
                 }
@@ -264,7 +270,7 @@ impl<'p> DCPU16<'p> {
 
     fn read_instruction(&mut self) -> InstructionWithOperands {
         let raw_instruction = self.read_word_and_advance_pc();
-        let instruction_word = InstructionWord::from(raw_instruction);
+        let instruction_word = InstructionWord::decode(raw_instruction);
         assert!(instruction_word.length_in_words() >= 1);
 
         let instruction = match instruction_word.length_in_words() {
