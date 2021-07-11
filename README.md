@@ -34,6 +34,9 @@ fn main() {
     assert_eq!(cpu.program_counter, 0x001A);
     assert_eq!(cpu.register(Register::A), 0x2000);
     assert_eq!(cpu.register(Register::X), 0x40);
+    
+    let ram = cpu.ram();
+    assert_eq!(ram[0x1000], 0x20);
 }
 ```
 
@@ -87,7 +90,7 @@ The above program can be assembled into to the following bytecode:
 When executing the bytecode instructions, the program output looks like this:
 
 ```
- INFO dcpu16: Loaded 28 words of program data
+ INFO dcpu16: Loaded 32 words of program data
 DEBUG dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
 DEBUG dcpu16: EXEC 0000: 7c01 0030 ; SET A, 0x30 => "A <- 0x30"
 DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000

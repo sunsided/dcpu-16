@@ -69,6 +69,16 @@ impl<'p> DCPU16<'p> {
         self.registers[register as usize]
     }
 
+    /// Gets a reference to the RAM.
+    pub fn ram(&self) -> &[u16; NUM_RAM_WORDS] {
+        self.ram.as_ref()
+    }
+
+    /// Gets a reference to the RAM.
+    pub fn ram_mut(&mut self) -> &[u16; NUM_RAM_WORDS] {
+        self.ram.as_mut()
+    }
+
     /// Executes the program until a crash loop is detected.
     pub fn run(&mut self) {
         while self.step() {}

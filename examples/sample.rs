@@ -23,4 +23,9 @@ fn main() {
     // Some register tests.
     assert_eq!(cpu.register(Register::A), 0x2000);
     assert_eq!(cpu.register(Register::X), 0x40);
+
+    // Some RAM value tests.
+    let ram = cpu.ram();
+    assert_eq!(ram[0x1000], 0x20);
+    assert_eq!(ram[0x2000 + 0x0A], ram[0x2000]);
 }
