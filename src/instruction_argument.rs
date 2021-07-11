@@ -118,7 +118,7 @@ impl Decode for InstructionArgumentDefinition {
             0x20..=0x3f => InstructionArgumentDefinition::Literal {
                 value: value - 0x20,
             },
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
 }

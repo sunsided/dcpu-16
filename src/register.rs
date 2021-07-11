@@ -25,7 +25,7 @@ impl From<Word> for Register {
             x if x == Register::Z as Word => Register::Z,
             x if x == Register::I as Word => Register::I,
             x if x == Register::J as Word => Register::J,
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
 }

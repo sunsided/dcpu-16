@@ -45,7 +45,7 @@ impl Disassemble for ResolvedValue {
                 InstructionArgument::AddressOffset { address, register } => {
                     String::from(format!("[0x{:02X}+{}]", address, register.disassemble()))
                 }
-                _ => panic!(),
+                _ => unreachable!(),
             },
             InstructionArgumentDefinition::Pop => String::from("POP"),
             InstructionArgumentDefinition::Peek => String::from("PEEK"),
@@ -71,7 +71,7 @@ impl Disassemble for ResolvedValue {
                     address,
                     register.disassemble_human()
                 )),
-                _ => panic!(),
+                _ => unreachable!(),
             },
             InstructionArgumentDefinition::AtAddressFromRegister { register } => {
                 String::from(format!("RAM[{}]", register.disassemble_human()))

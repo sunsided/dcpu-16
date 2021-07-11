@@ -277,7 +277,7 @@ impl<'p> DCPU16<'p> {
             1 => Instruction::OneWord { raw_instruction, instruction: instruction_word },
             2 => Instruction::TwoWord { raw_instruction, instruction: instruction_word, raw_1st: self.read_word_and_advance_pc() },
             3 => Instruction::ThreeWord { raw_instruction, instruction: instruction_word, raw_1st: self.read_word_and_advance_pc(), raw_2nd: self.read_word_and_advance_pc() },
-            _ => panic!()
+            _ => unreachable!()
         };
 
         InstructionWithOperands::resolve(self, instruction)

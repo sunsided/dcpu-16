@@ -105,7 +105,7 @@ impl Decode for InstructionWord {
             0xd => Self::Ifn { a, b },
             0xe => Self::Ifg { a, b },
             0xf => Self::Ifb { a, b },
-            _ => panic!(),
+            _ => unreachable!(),
         }
     }
 }
