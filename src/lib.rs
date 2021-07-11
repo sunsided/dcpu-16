@@ -1,15 +1,13 @@
-mod address;
 mod disassemble;
 mod instruction;
 mod instruction_with_operands;
 mod register;
-mod value;
+mod instruction_argument;
 
-use crate::address::Address;
-use crate::instruction::{Instruction, NonBasicInstruction};
+use crate::instruction::{Instruction, InstructionWord, NonBasicInstruction};
 use crate::instruction_with_operands::InstructionWithOperands;
 pub use crate::register::Register;
-use crate::value::Value;
+use crate::instruction_argument::{InstructionArgumentDefinition, InstructionArgument};
 use std::ops::{BitAnd, BitOr, BitXor};
 use tracing::{debug, info, trace, warn};
 
@@ -120,45 +118,45 @@ impl<'p> DCPU16<'p> {
             );
 
         match instruction.instruction {
-            Instruction::NonBasic(nbi) => match nbi {
+            InstructionWord::NonBasic(nbi) => match nbi {
                 NonBasicInstruction::Reserved => panic!(),
                 NonBasicInstruction::Jsr { .. } => {
                     assert!(instruction.b.is_none());
                     self.stack_pointer -= 1;
                     self.ram[self.stack_pointer as usize] = self.program_counter;
-                    self.program_counter = instruction.a.resolved_value;
+                    self.program_counter = instruction.a.expect("require value").resolved_value;
                 }
             },
-            Instruction::Set { .. } => {
+            InstructionWord::Set { .. } => {
                 self.store_value(
-                    instruction.a.value_address,
-                    instruction.b.unwrap().resolved_value,
+                    instruction.a.expect("require first value").argument,
+                    instruction.b.expect("require second value").resolved_value,
                 );
             }
-            Instruction::Add { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Add { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let (result, overflow) = lhs.overflowing_add(rhs);
                 self.overflow = if overflow { 0x0001 } else { 0x0 };
                 self.store_value(a, result);
             }
-            Instruction::Sub { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Sub { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let (result, overflow) = lhs.overflowing_sub(rhs);
                 self.overflow = if overflow { 0xffff } else { 0x0 };
                 self.store_value(a, result);
             }
-            Instruction::Mul { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Mul { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let result = lhs.wrapping_mul(rhs);
                 self.overflow = (((lhs as u32 * rhs as u32) >> 16) & 0xffff) as _;
                 self.store_value(a, result);
             }
-            Instruction::Div { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Div { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 if rhs > 0 {
                     let result = lhs.wrapping_div(rhs);
                     self.overflow = ((((lhs as u32) << 16) / (rhs as u32)) & 0xffff) as _;
@@ -168,9 +166,9 @@ impl<'p> DCPU16<'p> {
                     self.store_value(a, 0);
                 }
             }
-            Instruction::Mod { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Mod { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 if rhs > 0 {
                     let result = lhs % rhs;
                     self.store_value(a, result);
@@ -178,62 +176,62 @@ impl<'p> DCPU16<'p> {
                     self.store_value(a, 0);
                 }
             }
-            Instruction::Shl { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Shl { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let result = lhs << rhs;
                 self.overflow = ((((lhs as u32) << (rhs as u32)) >> 16) & 0xffff) as u16;
                 self.store_value(a, result);
             }
-            Instruction::Shr { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Shr { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let result = lhs >> rhs;
                 self.overflow = ((((lhs as u32) << 16) >> (rhs as u32)) & 0xffff) as u16;
                 self.store_value(a, result);
             }
-            Instruction::And { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::And { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let result = lhs.bitand(rhs);
                 self.store_value(a, result);
             }
-            Instruction::Bor { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Bor { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let result = lhs.bitor(rhs);
                 self.store_value(a, result);
             }
-            Instruction::Xor { .. } => {
-                let (a, lhs) = instruction.a.unpack();
-                let (_, rhs) = instruction.b.unwrap().unpack();
+            InstructionWord::Xor { .. } => {
+                let (a, lhs) = instruction.a.expect("require first value").unpack();
+                let (_, rhs) = instruction.b.expect("require second value").unpack();
                 let result = lhs.bitxor(rhs);
                 self.store_value(a, result);
             }
-            Instruction::Ife { .. } => {
-                let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.unwrap().resolved_value;
+            InstructionWord::Ife { .. } => {
+                let lhs = instruction.a.expect("require first value").resolved_value;
+                let rhs = instruction.b.expect("require second value").resolved_value;
                 if !(lhs == rhs) {
                     self.skip_next_intruction = true;
                 }
             }
-            Instruction::Ifn { .. } => {
-                let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.unwrap().resolved_value;
+            InstructionWord::Ifn { .. } => {
+                let lhs = instruction.a.expect("require first value").resolved_value;
+                let rhs = instruction.b.expect("require second value").resolved_value;
                 if !(lhs != rhs) {
                     self.skip_next_intruction = true;
                 }
             }
-            Instruction::Ifg { .. } => {
-                let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.unwrap().resolved_value;
+            InstructionWord::Ifg { .. } => {
+                let lhs = instruction.a.expect("require first value").resolved_value;
+                let rhs = instruction.b.expect("require second value").resolved_value;
                 if !(lhs > rhs) {
                     self.skip_next_intruction = true;
                 }
             }
-            Instruction::Ifb { .. } => {
-                let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.unwrap().resolved_value;
+            InstructionWord::Ifb { .. } => {
+                let lhs = instruction.a.expect("require first value").resolved_value;
+                let rhs = instruction.b.expect("require second value").resolved_value;
                 if !(lhs.bitor(rhs) != 0) {
                     self.skip_next_intruction = true;
                 }
@@ -255,63 +253,18 @@ impl<'p> DCPU16<'p> {
     }
 
     fn read_instruction(&mut self) -> InstructionWithOperands {
-        let instruction_word = self.read_word_and_advance_pc();
-        let instruction = Instruction::from(instruction_word);
-        assert!(instruction.len() >= 1);
+        let raw_instruction = self.read_word_and_advance_pc();
+        let instruction_word = InstructionWord::from(raw_instruction);
+        assert!(instruction_word.length_in_words() >= 1);
 
-        match instruction {
-            Instruction::NonBasic(nbi) => match nbi {
-                NonBasicInstruction::Reserved => panic!(),
-                NonBasicInstruction::Jsr { a } => {
-                    InstructionWithOperands::resolve_1op(self, instruction_word, instruction, a)
-                }
-            },
-            Instruction::Set { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Add { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Sub { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Mul { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Div { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Mod { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Shl { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Shr { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::And { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Bor { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Xor { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Ife { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Ifn { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Ifg { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-            Instruction::Ifb { a, b } => {
-                InstructionWithOperands::resolve_2op(self, instruction_word, instruction, a, b)
-            }
-        }
+        let instruction = match instruction_word.length_in_words() {
+            1 => Instruction::OneWord { raw_instruction, instruction: instruction_word },
+            2 => Instruction::TwoWord { raw_instruction, instruction: instruction_word, raw_1st: self.read_word_and_advance_pc() },
+            3 => Instruction::ThreeWord { raw_instruction, instruction: instruction_word, raw_1st: self.read_word_and_advance_pc(), raw_2nd: self.read_word_and_advance_pc() },
+            _ => panic!()
+        };
+
+        InstructionWithOperands::resolve(self, instruction)
     }
 
     /// Reads the value at the current program counter and advances the program counter.
@@ -321,87 +274,84 @@ impl<'p> DCPU16<'p> {
         value
     }
 
-    /// Reads the value from the specified address.
-    fn read_value(&self, address: Address) -> Word {
+    /// Shorthand for [`interpret_argument()`] followed by [`read_value()`].
+    /// Returns the address and the value at the address.
+    fn resolve_argument(&mut self, value: InstructionArgumentDefinition, operand: Option<Word>) -> (InstructionArgument, Word) {
+        let argument = self.interpret_argument(value, operand);
+        (argument, self.read_value(argument))
+    }
+
+    /// Resolves an value into an [`InstructionArgument`].
+    fn interpret_argument(&mut self, value: InstructionArgumentDefinition, operand: Option<Word>) -> InstructionArgument {
+        match value {
+            InstructionArgumentDefinition::Register { register } => InstructionArgument::Register(register),
+            InstructionArgumentDefinition::AtAddressFromRegister { register } => {
+                InstructionArgument::Address(self.registers[register as usize])
+            }
+            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { register } => {
+                InstructionArgument::AddressOffset { address: operand.expect("operand required"), register }
+            }
+            InstructionArgumentDefinition::Pop => {
+                let address = self.stack_pointer;
+                self.stack_pointer += 1;
+                InstructionArgument::Address(address)
+            }
+            InstructionArgumentDefinition::Peek => InstructionArgument::Address(self.stack_pointer),
+            InstructionArgumentDefinition::Push => {
+                self.stack_pointer -= 1;
+                InstructionArgument::Address(self.stack_pointer)
+            }
+            InstructionArgumentDefinition::OfStackPointer => InstructionArgument::StackPointer,
+            InstructionArgumentDefinition::OfProgramCounter => InstructionArgument::ProgramCounter,
+            InstructionArgumentDefinition::OfOverflow => InstructionArgument::Overflow,
+            InstructionArgumentDefinition::AtAddressFromNextWord => {
+                InstructionArgument::Address(operand.expect("operand required"))
+            }
+            InstructionArgumentDefinition::NextWordLiteral => {
+                InstructionArgument::Literal(operand.expect("operand required"))
+            }
+            InstructionArgumentDefinition::Literal { value } => InstructionArgument::Literal(value),
+        }
+    }
+
+    /// Reads the value from the specified argument.
+    fn read_value(&self, address: InstructionArgument) -> Word {
         match address {
-            Address::Literal(value) => value,
-            Address::Register(register) => self.registers[register as usize],
-            Address::Address(address) => self.ram[address as usize],
-            Address::AddressOffset { address, register } => {
+            InstructionArgument::Literal(value) => value,
+            InstructionArgument::Register(register) => self.registers[register as usize],
+            InstructionArgument::Address(address) => self.ram[address as usize],
+            InstructionArgument::AddressOffset { address, register } => {
                 let register_value = self.registers[register as usize];
                 self.ram[address as usize + register_value as usize]
             }
-            Address::ProgramCounter => self.program_counter,
-            Address::StackPointer => self.stack_pointer,
-            Address::Overflow => self.overflow,
+            InstructionArgument::ProgramCounter => self.program_counter,
+            InstructionArgument::StackPointer => self.stack_pointer,
+            InstructionArgument::Overflow => self.overflow,
         }
     }
 
     /// Stores the value to the specified address.
-    fn store_value(&mut self, address: Address, value: Word) {
+    fn store_value(&mut self, address: InstructionArgument, value: Word) {
         match address {
             // Specification:
             // If any instruction tries to assign a literal value, the assignment fails silently.
             // Other than that, the instruction behaves as normal.
-            Address::Literal(_) => {
+            InstructionArgument::Literal(_) => {
                 trace!(
                     "Skipping literal assignment of word {word:04X} to literal {literal:04X}",
                     word = value,
                     literal = address.get_literal().unwrap()
                 )
             }
-            Address::Register(register) => self.registers[register as usize] = value,
-            Address::Address(address) => self.ram[address as usize] = value,
-            Address::AddressOffset { address, register } => {
+            InstructionArgument::Register(register) => self.registers[register as usize] = value,
+            InstructionArgument::Address(address) => self.ram[address as usize] = value,
+            InstructionArgument::AddressOffset { address, register } => {
                 let register_value = self.registers[register as usize];
                 self.ram[address as usize + register_value as usize] = value
             }
-            Address::ProgramCounter => self.program_counter = value,
-            Address::StackPointer => self.stack_pointer = value,
-            Address::Overflow => self.overflow = value,
-        }
-    }
-
-    /// Shorthand for [`interpret_address()`] followed by [`read_value()`].
-    /// Returns the address and the value at the address.
-    fn resolve_address(&mut self, value: Value) -> (Address, Word) {
-        let address = self.interpret_address(value);
-        (address, self.read_value(address))
-    }
-
-    /// Resolves an value into an [`Address`].
-    fn interpret_address(&mut self, value: Value) -> Address {
-        match value {
-            Value::Register { register } => Address::Register(register),
-            Value::AtAddressFromRegister { register } => {
-                Address::Address(self.registers[register as usize])
-            }
-            Value::AtAddressFromNextWordPlusRegister { register } => {
-                let address = self.read_word_and_advance_pc();
-                Address::AddressOffset { address, register }
-            }
-            Value::Pop => {
-                let address = self.stack_pointer;
-                self.stack_pointer += 1;
-                Address::Address(address)
-            }
-            Value::Peek => Address::Address(self.stack_pointer),
-            Value::Push => {
-                self.stack_pointer -= 1;
-                Address::Address(self.stack_pointer)
-            }
-            Value::OfStackPointer => Address::StackPointer,
-            Value::OfProgramCounter => Address::ProgramCounter,
-            Value::OfOverflow => Address::Overflow,
-            Value::AtAddressFromNextWord => {
-                let word = self.read_word_and_advance_pc();
-                Address::Address(word)
-            }
-            Value::NextWordLiteral => {
-                let word = self.read_word_and_advance_pc();
-                Address::Literal(word)
-            }
-            Value::Literal { value } => Address::Literal(value),
+            InstructionArgument::ProgramCounter => self.program_counter = value,
+            InstructionArgument::StackPointer => self.stack_pointer = value,
+            InstructionArgument::Overflow => self.overflow = value,
         }
     }
 
