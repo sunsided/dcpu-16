@@ -1,4 +1,4 @@
-use crate::{Register, Word, Decode};
+use crate::{Decode, Register, Word};
 
 /// The argument of an instruction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -11,6 +11,8 @@ pub enum InstructionArgument {
     ///
     /// Since the RAM contains the stack, this may also refer to a stack value.
     Address(Word),
+    /// The value of a register used as an address.
+    AddressFromRegister(Register),
     /// The value at the specified address in RAM, offset by the value in the specified register.
     ///
     /// Since the RAM contains the stack, this may also refer to a stack value.
@@ -18,17 +20,79 @@ pub enum InstructionArgument {
         /// The base address.
         address: Word,
         /// The register containing the value by which to offset the base address.
-        register: Register
+        register: Register,
     },
-    /// The value of the program counter.
+    /// The value of a special register.
+    SpecialRegister(SpecialRegister),
+    /// An operation on the stack.
+    StackOperation(StackOperation),
+}
+
+/// An operation on the stack.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum StackOperation {
+    /// Obtains a value from the stack.
+    Pop,
+    /// Gets the current value int he stack without modifying the stack pointer.
+    Peek,
+    /// Pushes a value onto the stack.
+    Push,
+}
+
+/// A special register.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SpecialRegister {
+    /// The program counter.
     ProgramCounter,
-    /// The value of the stack pointer.
+    /// The stack pointer.
     StackPointer,
-    /// The value of the overflow register.
+    /// The overflow register.
     Overflow,
 }
 
 impl InstructionArgument {
+    pub fn from(value: InstructionArgumentDefinition, operand: Option<Word>) -> Self {
+        match value {
+            InstructionArgumentDefinition::Register { register } => {
+                InstructionArgument::Register(register)
+            }
+            InstructionArgumentDefinition::AtAddressFromRegister { register } => {
+                InstructionArgument::AddressFromRegister(register)
+            }
+            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { register } => {
+                InstructionArgument::AddressOffset {
+                    address: operand.expect("operand required"),
+                    register,
+                }
+            }
+            InstructionArgumentDefinition::Pop => {
+                InstructionArgument::StackOperation(StackOperation::Pop)
+            }
+            InstructionArgumentDefinition::Peek => {
+                InstructionArgument::StackOperation(StackOperation::Peek)
+            }
+            InstructionArgumentDefinition::Push => {
+                InstructionArgument::StackOperation(StackOperation::Push)
+            }
+            InstructionArgumentDefinition::OfStackPointer => {
+                InstructionArgument::SpecialRegister(SpecialRegister::StackPointer)
+            }
+            InstructionArgumentDefinition::OfProgramCounter => {
+                InstructionArgument::SpecialRegister(SpecialRegister::ProgramCounter)
+            }
+            InstructionArgumentDefinition::OfOverflow => {
+                InstructionArgument::SpecialRegister(SpecialRegister::Overflow)
+            }
+            InstructionArgumentDefinition::AtAddressFromNextWord => {
+                InstructionArgument::Address(operand.expect("operand required"))
+            }
+            InstructionArgumentDefinition::NextWordLiteral => {
+                InstructionArgument::Literal(operand.expect("operand required"))
+            }
+            InstructionArgumentDefinition::Literal { value } => InstructionArgument::Literal(value),
+        }
+    }
+
     /// Gets the literal value of the argument, if it exists.
     pub fn get_literal(&self) -> Option<Word> {
         match self {
@@ -195,27 +259,57 @@ mod tests {
 
     #[test]
     fn value_pop_peek_push_works() {
-        assert_eq!(InstructionArgumentDefinition::decode(0x18), InstructionArgumentDefinition::Pop);
-        assert_eq!(InstructionArgumentDefinition::decode(0x19), InstructionArgumentDefinition::Peek);
-        assert_eq!(InstructionArgumentDefinition::decode(0x1a), InstructionArgumentDefinition::Push);
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x18),
+            InstructionArgumentDefinition::Pop
+        );
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x19),
+            InstructionArgumentDefinition::Peek
+        );
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x1a),
+            InstructionArgumentDefinition::Push
+        );
     }
 
     #[test]
     fn value_sp_pc_o_works() {
-        assert_eq!(InstructionArgumentDefinition::decode(0x1b), InstructionArgumentDefinition::OfStackPointer);
-        assert_eq!(InstructionArgumentDefinition::decode(0x1c), InstructionArgumentDefinition::OfProgramCounter);
-        assert_eq!(InstructionArgumentDefinition::decode(0x1d), InstructionArgumentDefinition::OfOverflow);
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x1b),
+            InstructionArgumentDefinition::OfStackPointer
+        );
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x1c),
+            InstructionArgumentDefinition::OfProgramCounter
+        );
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x1d),
+            InstructionArgumentDefinition::OfOverflow
+        );
     }
 
     #[test]
     fn value_next_word_works() {
-        assert_eq!(InstructionArgumentDefinition::decode(0x1e), InstructionArgumentDefinition::AtAddressFromNextWord);
-        assert_eq!(InstructionArgumentDefinition::decode(0x1f), InstructionArgumentDefinition::NextWordLiteral);
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x1e),
+            InstructionArgumentDefinition::AtAddressFromNextWord
+        );
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x1f),
+            InstructionArgumentDefinition::NextWordLiteral
+        );
     }
 
     #[test]
     fn value_literal_works() {
-        assert_eq!(InstructionArgumentDefinition::decode(0x20), InstructionArgumentDefinition::Literal { value: 0x00 });
-        assert_eq!(InstructionArgumentDefinition::decode(0x3f), InstructionArgumentDefinition::Literal { value: 0x1f });
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x20),
+            InstructionArgumentDefinition::Literal { value: 0x00 }
+        );
+        assert_eq!(
+            InstructionArgumentDefinition::decode(0x3f),
+            InstructionArgumentDefinition::Literal { value: 0x1f }
+        );
     }
 }

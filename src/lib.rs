@@ -1,20 +1,19 @@
 #[cfg(feature = "assembler")]
 mod assembler;
 mod disassemble;
-mod instruction_word;
 mod instruction;
+mod instruction_argument;
+mod instruction_word;
 mod register;
 
 #[cfg(feature = "assembler")]
 pub use crate::assembler::assemble;
 use crate::instruction::{Instruction, InstructionWithOperands};
 use crate::instruction_argument::{
-    InstructionArgument, InstructionArgumentDefinition, StackOperation,
+    InstructionArgument, InstructionArgumentDefinition, SpecialRegister, StackOperation,
 };
 use crate::instruction_word::{InstructionWord, NonBasicInstruction};
-use crate::instruction::{InstructionWithOperands, Instruction};
 pub use crate::register::Register;
-use crate::instruction_argument::{InstructionArgumentDefinition, InstructionArgument};
 use std::ops::{BitAnd, BitOr, BitXor};
 use tracing::{debug, info, trace, warn};
 
@@ -52,7 +51,7 @@ pub struct DCPU16<'p> {
     /// The program
     program: &'p [u16],
     /// Indicates whether the next instruction should be skipped.
-    skip_next_intruction: bool
+    skip_next_intruction: bool,
 }
 
 impl<'p> DCPU16<'p> {
@@ -66,7 +65,7 @@ impl<'p> DCPU16<'p> {
             overflow: 0,
             program,
             previous_program_counter: 0,
-            skip_next_intruction: false
+            skip_next_intruction: false,
         };
 
         info!(
@@ -104,8 +103,7 @@ impl<'p> DCPU16<'p> {
 
         if self.skip_next_intruction {
             self.execute_skipped_instruction(instruction);
-        }
-        else {
+        } else {
             if !self.execute_instruction(instruction) {
                 return false;
             }
@@ -125,20 +123,20 @@ impl<'p> DCPU16<'p> {
     /// "Executes" a skipped instruction.
     fn execute_skipped_instruction(&mut self, instruction: InstructionWithOperands) {
         debug!(
-                "SKIP {operation_pc:04X}: {instruction:?}",
-                operation_pc = self.previous_program_counter,
-                instruction = instruction
-            );
+            "SKIP {operation_pc:04X}: {instruction:?}",
+            operation_pc = self.previous_program_counter,
+            instruction = instruction
+        );
         self.skip_next_intruction = false;
     }
 
     /// Executes an instruction.
     fn execute_instruction(&mut self, instruction: InstructionWithOperands) -> bool {
         debug!(
-                "EXEC {operation_pc:04X}: {instruction:?}",
-                operation_pc = self.previous_program_counter,
-                instruction = instruction
-            );
+            "EXEC {operation_pc:04X}: {instruction:?}",
+            operation_pc = self.previous_program_counter,
+            instruction = instruction
+        );
 
         match instruction.instruction {
             InstructionWord::NonBasic(nbi) => match nbi {
@@ -153,7 +151,10 @@ impl<'p> DCPU16<'p> {
             InstructionWord::Set { .. } => {
                 self.store_value(
                     instruction.a.argument,
-                    instruction.b.expect("require second argument").resolved_value,
+                    instruction
+                        .b
+                        .expect("require second argument")
+                        .resolved_value,
                 );
             }
             InstructionWord::Add { .. } => {
@@ -233,28 +234,40 @@ impl<'p> DCPU16<'p> {
             }
             InstructionWord::Ife { .. } => {
                 let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.expect("require second argument").resolved_value;
+                let rhs = instruction
+                    .b
+                    .expect("require second argument")
+                    .resolved_value;
                 if !(lhs == rhs) {
                     self.skip_next_intruction = true;
                 }
             }
             InstructionWord::Ifn { .. } => {
                 let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.expect("require second argument").resolved_value;
+                let rhs = instruction
+                    .b
+                    .expect("require second argument")
+                    .resolved_value;
                 if !(lhs != rhs) {
                     self.skip_next_intruction = true;
                 }
             }
             InstructionWord::Ifg { .. } => {
                 let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.expect("require second argument").resolved_value;
+                let rhs = instruction
+                    .b
+                    .expect("require second argument")
+                    .resolved_value;
                 if !(lhs > rhs) {
                     self.skip_next_intruction = true;
                 }
             }
             InstructionWord::Ifb { .. } => {
                 let lhs = instruction.a.resolved_value;
-                let rhs = instruction.b.expect("require second argument").resolved_value;
+                let rhs = instruction
+                    .b
+                    .expect("require second argument")
+                    .resolved_value;
                 if !(lhs.bitor(rhs) != 0) {
                     self.skip_next_intruction = true;
                 }
@@ -281,10 +294,22 @@ impl<'p> DCPU16<'p> {
         assert!(instruction_word.length_in_words() >= 1);
 
         let instruction = match instruction_word.length_in_words() {
-            1 => Instruction::OneWord { raw_instruction, instruction: instruction_word },
-            2 => Instruction::TwoWord { raw_instruction, instruction: instruction_word, raw_1st: self.read_word_and_advance_pc() },
-            3 => Instruction::ThreeWord { raw_instruction, instruction: instruction_word, raw_1st: self.read_word_and_advance_pc(), raw_2nd: self.read_word_and_advance_pc() },
-            _ => unreachable!()
+            1 => Instruction::OneWord {
+                raw_instruction,
+                instruction: instruction_word,
+            },
+            2 => Instruction::TwoWord {
+                raw_instruction,
+                instruction: instruction_word,
+                raw_1st: self.read_word_and_advance_pc(),
+            },
+            3 => Instruction::ThreeWord {
+                raw_instruction,
+                instruction: instruction_word,
+                raw_1st: self.read_word_and_advance_pc(),
+                raw_2nd: self.read_word_and_advance_pc(),
+            },
+            _ => unreachable!(),
         };
 
         InstructionWithOperands::resolve(self, instruction)
@@ -299,57 +324,48 @@ impl<'p> DCPU16<'p> {
 
     /// Shorthand for [`interpret_argument()`] followed by [`read_value()`].
     /// Returns the address and the value at the address.
-    fn resolve_argument(&mut self, value: InstructionArgumentDefinition, operand: Option<Word>) -> (InstructionArgument, Word) {
-        let argument = self.interpret_argument(value, operand);
+    fn resolve_argument(
+        &mut self,
+        value: InstructionArgumentDefinition,
+        operand: Option<Word>,
+    ) -> (InstructionArgument, Word) {
+        let argument = InstructionArgument::from(value, operand);
         (argument, self.read_value(argument))
     }
 
-    /// Resolves an value into an [`InstructionArgument`].
-    fn interpret_argument(&mut self, value: InstructionArgumentDefinition, operand: Option<Word>) -> InstructionArgument {
-        match value {
-            InstructionArgumentDefinition::Register { register } => InstructionArgument::Register(register),
-            InstructionArgumentDefinition::AtAddressFromRegister { register } => {
-                InstructionArgument::Address(self.registers[register as usize])
-            }
-            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { register } => {
-                InstructionArgument::AddressOffset { address: operand.expect("operand required"), register }
-            }
-            InstructionArgumentDefinition::Pop => {
-                let address = self.stack_pointer;
-                self.stack_pointer += 1;
-                InstructionArgument::Address(address)
-            }
-            InstructionArgumentDefinition::Peek => InstructionArgument::Address(self.stack_pointer),
-            InstructionArgumentDefinition::Push => {
-                self.stack_pointer -= 1;
-                InstructionArgument::Address(self.stack_pointer)
-            }
-            InstructionArgumentDefinition::OfStackPointer => InstructionArgument::StackPointer,
-            InstructionArgumentDefinition::OfProgramCounter => InstructionArgument::ProgramCounter,
-            InstructionArgumentDefinition::OfOverflow => InstructionArgument::Overflow,
-            InstructionArgumentDefinition::AtAddressFromNextWord => {
-                InstructionArgument::Address(operand.expect("operand required"))
-            }
-            InstructionArgumentDefinition::NextWordLiteral => {
-                InstructionArgument::Literal(operand.expect("operand required"))
-            }
-            InstructionArgumentDefinition::Literal { value } => InstructionArgument::Literal(value),
-        }
-    }
-
     /// Reads the value from the specified argument.
-    fn read_value(&self, address: InstructionArgument) -> Word {
+    fn read_value(&mut self, address: InstructionArgument) -> Word {
         match address {
             InstructionArgument::Literal(value) => value,
             InstructionArgument::Register(register) => self.registers[register as usize],
             InstructionArgument::Address(address) => self.ram[address as usize],
-            InstructionArgument::AddressOffset { address, register } => {
-                let register_value = self.registers[register as usize];
-                self.ram[address as usize + register_value as usize]
+            InstructionArgument::AddressFromRegister(register) => {
+                let address = self.registers[register as usize];
+                self.ram[address as usize]
             }
-            InstructionArgument::ProgramCounter => self.program_counter,
-            InstructionArgument::StackPointer => self.stack_pointer,
-            InstructionArgument::Overflow => self.overflow,
+            InstructionArgument::AddressOffset { address, register } => {
+                let offset = self.registers[register as usize];
+                self.ram[address as usize + offset as usize]
+            }
+            InstructionArgument::SpecialRegister(register) => match register {
+                SpecialRegister::ProgramCounter => self.program_counter,
+                SpecialRegister::StackPointer => self.stack_pointer,
+                SpecialRegister::Overflow => self.overflow,
+            },
+            InstructionArgument::StackOperation(operation) => match operation {
+                StackOperation::Peek => self.ram[self.stack_pointer as usize],
+                StackOperation::Pop => {
+                    let address = self.stack_pointer;
+                    self.stack_pointer += 1;
+                    self.ram[address as usize]
+                }
+                StackOperation::Push => {
+                    warn!("Detected write from a PUSH");
+                    self.stack_pointer -= 1;
+                    let address = self.stack_pointer;
+                    self.ram[address as usize]
+                }
+            },
         }
     }
 
@@ -368,13 +384,35 @@ impl<'p> DCPU16<'p> {
             }
             InstructionArgument::Register(register) => self.registers[register as usize] = value,
             InstructionArgument::Address(address) => self.ram[address as usize] = value,
+            InstructionArgument::AddressFromRegister(register) => {
+                self.ram[self.registers[register as usize] as usize] = value
+            }
             InstructionArgument::AddressOffset { address, register } => {
                 let register_value = self.registers[register as usize];
                 self.ram[address as usize + register_value as usize] = value
             }
-            InstructionArgument::ProgramCounter => self.program_counter = value,
-            InstructionArgument::StackPointer => self.stack_pointer = value,
-            InstructionArgument::Overflow => self.overflow = value,
+            InstructionArgument::SpecialRegister(register) => match register {
+                SpecialRegister::ProgramCounter => self.program_counter = value,
+                SpecialRegister::StackPointer => self.stack_pointer = value,
+                SpecialRegister::Overflow => self.overflow = value,
+            },
+            InstructionArgument::StackOperation(register) => match register {
+                StackOperation::Peek => {
+                    warn!("Detected write to a PEEK");
+                    self.ram[self.stack_pointer as usize] = value
+                }
+                StackOperation::Pop => {
+                    warn!("Detected write to a POP");
+                    let address = self.stack_pointer;
+                    self.stack_pointer += 1;
+                    self.ram[address as usize] = value
+                }
+                StackOperation::Push => {
+                    self.stack_pointer -= 1;
+                    let address = self.stack_pointer;
+                    self.ram[address as usize] = value
+                }
+            },
         }
     }
 
