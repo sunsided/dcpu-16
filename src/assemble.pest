@@ -44,7 +44,7 @@ value = _{
     | stack_op
 }
 
-literal = _{
+literal = {
       value_hex
     | value_dec
 }

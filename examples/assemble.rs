@@ -1,21 +1,9 @@
-#[macro_use]
-extern crate pest_derive;
-
 use pest::Parser;
+use pest_derive::Parser;
 
 #[derive(Parser)]
 #[grammar = "assemble.pest"]
 pub struct AssembleParser;
-
-/*
-; abc
-JSR 10;comment
-JSR roflcopter
-:roflcopter
-ADD 10, 0x20
-ADD PC, [0x1000 + A]
-MUL PUSH, O
- */
 
 fn main() {
     let source = r"
@@ -56,13 +44,41 @@ fn main() {
         match record.as_rule() {
             Rule::comment => {}
             Rule::label => {
-                println!("{:?}", record);
+                let inner = record.into_inner();
+                println!("{:?}", inner);
             }
             Rule::basic_instruction => {
-                println!("{:?}", record);
+                let mut inner = record.into_inner();
+                let instruction = inner.next().unwrap().as_str();
+
+                // value a
+                let value_a = match inner.next().unwrap().as_rule() {
+                    Rule::literal => "literal",
+                    Rule::register =>"register",
+                    Rule::address => "address",
+                    Rule::address_with_offset => "address_with_offset",
+                    Rule::special_register => "special_register",
+                    Rule::stack_op => "stack_op",
+                    _ => unreachable!()
+                };
+
+                // value b
+                let value_b = match inner.next().unwrap().as_rule() {
+                    Rule::literal => "literal",
+                    Rule::register =>"register",
+                    Rule::address => "address",
+                    Rule::address_with_offset => "address_with_offset",
+                    Rule::special_register => "special_register",
+                    Rule::stack_op => "stack_op",
+                    Rule::label_ref => "label_ref",
+                    _ => unreachable!()
+                };
+
+                println!("{} {}, {}", instruction, value_a, value_b);
             }
             Rule::nonbasic_instruction => {
-                println!("{:?}", record);
+                let inner = record.into_inner();
+                println!("{:?}", inner);
             }
             Rule::EOI => {}
             _ => unreachable!(),
