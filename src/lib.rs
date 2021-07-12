@@ -1,9 +1,16 @@
+#[cfg(feature = "assembler")]
+mod assembler;
 mod disassemble;
 mod instruction_word;
 mod instruction;
 mod register;
-mod instruction_argument;
 
+#[cfg(feature = "assembler")]
+pub use crate::assembler::assemble;
+use crate::instruction::{Instruction, InstructionWithOperands};
+use crate::instruction_argument::{
+    InstructionArgument, InstructionArgumentDefinition, StackOperation,
+};
 use crate::instruction_word::{InstructionWord, NonBasicInstruction};
 use crate::instruction::{InstructionWithOperands, Instruction};
 pub use crate::register::Register;

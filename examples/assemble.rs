@@ -1,9 +1,4 @@
-use pest::Parser;
-use pest_derive::Parser;
-
-#[derive(Parser)]
-#[grammar = "assemble.pest"]
-pub struct AssembleParser;
+use dcpu16::assemble;
 
 fn main() {
     let source = r"
@@ -34,54 +29,5 @@ fn main() {
         :crash        SET PC, crash            ; 7dc1 001a
     ";
 
-    let mut program = AssembleParser::parse(Rule::program, source)
-        .expect("unsuccessful parse");
-
-    // Get the top-level program rule.
-    let program = program.next().unwrap();
-
-    for record in program.into_inner() {
-        match record.as_rule() {
-            Rule::comment => {}
-            Rule::label => {
-                let inner = record.into_inner();
-                println!("{:?}", inner);
-            }
-            Rule::basic_instruction => {
-                let mut inner = record.into_inner();
-                let instruction = inner.next().unwrap().as_str();
-
-                // value a
-                let value_a = match inner.next().unwrap().as_rule() {
-                    Rule::literal => "literal",
-                    Rule::register =>"register",
-                    Rule::address => "address",
-                    Rule::address_with_offset => "address_with_offset",
-                    Rule::special_register => "special_register",
-                    Rule::stack_op => "stack_op",
-                    _ => unreachable!()
-                };
-
-                // value b
-                let value_b = match inner.next().unwrap().as_rule() {
-                    Rule::literal => "literal",
-                    Rule::register =>"register",
-                    Rule::address => "address",
-                    Rule::address_with_offset => "address_with_offset",
-                    Rule::special_register => "special_register",
-                    Rule::stack_op => "stack_op",
-                    Rule::label_ref => "label_ref",
-                    _ => unreachable!()
-                };
-
-                println!("{} {}, {}", instruction, value_a, value_b);
-            }
-            Rule::nonbasic_instruction => {
-                let inner = record.into_inner();
-                println!("{:?}", inner);
-            }
-            Rule::EOI => {}
-            _ => unreachable!(),
-        }
-    }
+    assemble(&source);
 }
