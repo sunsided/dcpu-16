@@ -1,0 +1,110 @@
+program = { SOI ~ NEWLINE* ~ (line ~ NEWLINE+)* ~ line? ~ EOI }
+
+line = _{ WHITE_SPACE* ~ stmt? }
+
+stmt = _{
+      comment
+    | commented_expr
+    | expr
+}
+
+commented_expr = _{ expr ~ WHITE_SPACE* ~ comment }
+
+nonl = _{ !NEWLINE ~ ANY }
+comment_token = _{ ";" }
+comment = _{ comment_token ~ nonl* }
+
+labeled_instruction = _{ label ~ WHITE_SPACE+ ~ instruction }
+
+expr = _{
+      labeled_instruction
+    | instruction
+    | label
+}
+
+instruction = _{
+      basic_instruction
+    | nonbasic_instruction
+}
+
+basic_instruction = { basic_operation ~ WHITE_SPACE+ ~ value ~ WHITE_SPACE* ~ "," ~ WHITE_SPACE* ~ value_or_label_ref }
+
+nonbasic_instruction = { nonbasic_operation ~ WHITE_SPACE+ ~ value_or_label_ref }
+
+value_or_label_ref = _{
+      value
+    | label_ref
+}
+
+value = _{
+      register
+    | stack_op
+    | special_register
+    | literal
+    | address
+    | address_with_offset
+}
+
+literal = {
+      value_hex
+    | value_dec
+}
+
+register = {
+      "A"
+    | "B"
+    | "C"
+    | "X"
+    | "Y"
+    | "Z"
+    | "I"
+    | "J"
+}
+
+special_register = {
+      "SP"
+    | "PC"
+    | "O"
+}
+
+stack_op = {
+      "PUSH"
+    | "PEEK"
+    | "POP"
+}
+
+address_start = { "[" }
+address_end = { "]" }
+address = { address_start ~ (literal | register) ~ address_end }
+
+address_plus = _{ "+" }
+address_with_offset = { address_start ~ literal ~ WHITE_SPACE* ~ address_plus ~ WHITE_SPACE* ~ register ~ address_end }
+
+value_hex = { "0x" ~ ASCII_HEX_DIGIT{1,4} }
+value_dec = { ASCII_DIGIT{1,5} }
+
+nonl_lbl = _{ !NEWLINE ~ ASCII_ALPHANUMERIC }
+label_name = { nonl_lbl+ }
+label_ref = { label_name }
+label_token = _{ ":" }
+label = { label_token ~ label_name }
+
+basic_operation = {
+      "SET"
+    | "ADD"
+    | "SUB"
+    | "MUL"
+    | "DIV"
+    | "MOD"
+    | "SHL"
+    | "SHR"
+    | "AND"
+    | "BOR"
+    | "XOR"
+    | "IFE"
+    | "IFN"
+    | "IFG"
+    | "IFB"
+}
+
+nonbasic_operation = { "JSR" }
