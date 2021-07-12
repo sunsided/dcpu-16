@@ -85,7 +85,7 @@ where
             }
         }
 
-        // If no instruction was replaced we achieved an optimum.
+        // If no instruction was replaced we arrived at a local optimum.
         if replace_list.len() == 0 {
             break;
         }
