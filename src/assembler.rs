@@ -191,7 +191,7 @@ where
                 let b = instruction.next().unwrap();
 
                 let operation = parse_basic_operation(op);
-                let value_a = parse_value(a);
+                let value_a = parse_instruction_argument(a);
                 let value_b = parse_value(b);
 
                 let instruction = Instruction::BasicInstruction(operation, value_a, value_b);
@@ -238,7 +238,7 @@ enum MetaInstruction {
 #[derive(Debug, Clone)]
 enum Instruction {
     /// A basic (two-operand) instruction.
-    BasicInstruction(BasicOperationName, Value, Value),
+    BasicInstruction(BasicOperationName, InstructionArgument, Value),
     /// A non-basic (one-operand) instruction.
     NonBasicInstruction(NonBasicOperationName, Value),
 }
@@ -423,6 +423,13 @@ fn parse_nonbasic_operation(pair: Pair<Rule>) -> NonBasicOperationName {
     match pair.as_str() {
         "JSR" => NonBasicOperationName::JSR,
         _ => unimplemented!(),
+    }
+}
+
+fn parse_instruction_argument(pair: Pair<Rule>) -> InstructionArgument {
+    match parse_value(pair) {
+        Value::Static(instruction_argument) => instruction_argument,
+        _ => unreachable!(),
     }
 }
 
@@ -636,34 +643,30 @@ impl Instruction {
             }
             Instruction::BasicInstruction(bi, a, b) => {
                 // Both arguments must be fixed-sized for this to be static.
-                if let Value::Static(arg1) = a {
-                    match b {
-                        Value::Static(arg2) => {
-                            let (opcode, arg1, arg2) = bi.bake(*arg1, *arg2);
-                            MaterializedInstruction::Static {
-                                instruction: self.clone(),
-                                instruction_word: opcode,
-                                arg1,
-                                arg2,
-                            }
-                        }
-                        Value::LabelReference(reference) => {
-                            // We now optimistically generate the instruction based on the current
-                            // best guess for the label address in the label map.
-                            let address = label_map[reference];
-                            let arg2 = InstructionArgument::Literal(address);
-                            let (opcode, arg1, arg2) = bi.bake(*arg1, arg2);
-
-                            MaterializedInstruction::Flexible {
-                                instruction: self.clone(),
-                                instruction_word: opcode,
-                                arg1,
-                                arg2,
-                            }
+                match b {
+                    Value::Static(arg2) => {
+                        let (opcode, arg1, arg2) = bi.bake(*a, *arg2);
+                        MaterializedInstruction::Static {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2,
                         }
                     }
-                } else {
-                    panic!("LHS must not be a label reference");
+                    Value::LabelReference(reference) => {
+                        // We now optimistically generate the instruction based on the current
+                        // best guess for the label address in the label map.
+                        let address = label_map[reference];
+                        let arg2 = InstructionArgument::Literal(address);
+                        let (opcode, arg1, arg2) = bi.bake(*a, arg2);
+
+                        MaterializedInstruction::Flexible {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2,
+                        }
+                    }
                 }
             }
         }
