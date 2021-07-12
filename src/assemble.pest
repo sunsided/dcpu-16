@@ -73,8 +73,12 @@ stack_op = {
     | "POP"
 }
 
-address = { "[" ~ (literal | register) ~ "]" }
-address_with_offset = { "[" ~ literal ~ WHITE_SPACE* ~ "+" ~ WHITE_SPACE* ~ register ~ "]" }
+address_start = { "[" }
+address_end = { "]" }
+address = { address_start ~ (literal | register) ~ address_end }
+
+address_plus = _{ "+" }
+address_with_offset = { address_start ~ literal ~ WHITE_SPACE* ~ address_plus ~ WHITE_SPACE* ~ register ~ address_end }
 
 value_hex = { "0x" ~ ASCII_HEX_DIGIT{1,4} }
 value_dec = { ASCII_DIGIT{1,5} }

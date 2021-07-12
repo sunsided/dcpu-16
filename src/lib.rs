@@ -72,7 +72,7 @@ impl<'p> DCPU16<'p> {
             "Loaded {program_length} words of program data",
             program_length = program.len()
         );
-        cpu.dump_state();
+        cpu.dump_registers();
         cpu
     }
 
@@ -110,7 +110,7 @@ impl<'p> DCPU16<'p> {
         }
 
         // We print the state after the execution.
-        self.dump_state();
+        self.dump_registers();
 
         if (self.program_counter as usize) < self.program.len() {
             return true;
@@ -416,7 +416,7 @@ impl<'p> DCPU16<'p> {
         }
     }
 
-    pub fn dump_state(&self) {
+    fn dump_registers(&self) {
         debug!(
             "Registers: A={a:04X?} B={b:04X?} C={c:04X?} X={x:04X?} Y={y:04X?} Z={z:04X?} I={i:04X?} J={j:04X?} PC⁎={pc:04X?} SP={sp:04X?} O={o:04X?}",
             a=self.registers[0],
@@ -431,6 +431,50 @@ impl<'p> DCPU16<'p> {
             sp=self.stack_pointer,
             o=self.overflow
         );
+    }
+
+    pub fn hexdump_program(&self, words_per_row: usize) -> String {
+        assert!(words_per_row > 0);
+        let newline = String::from('\n');
+        let length_of_newline = newline.len();
+        debug_assert_eq!(length_of_newline, 1);
+
+        let row_length = (4 + 1) + (1 + 4) * words_per_row + length_of_newline;
+        let row_count = self.program.len() / words_per_row;
+        let remainder = self.program.len() % words_per_row;
+        let mut expected_num_characters = row_length * row_count;
+        if remainder > 0 {
+            expected_num_characters += row_length;
+        }
+
+        let mut dump = String::with_capacity(expected_num_characters);
+
+        for row in 0..row_count {
+            let row_start = row * words_per_row;
+            dump.push_str(format!("{:04X}:", row_start).as_str());
+            for word in 0..words_per_row {
+                dump.push_str(format!(" {:04X}", self.program[row_start + word]).as_str());
+            }
+            dump.push_str(newline.as_str())
+        }
+
+        if remainder > 0 {
+            for row in row_count..(row_count + 1) {
+                let row_start = row * words_per_row;
+                dump.push_str(format!("{:04X}:", row_start).as_str());
+                for word in 0..remainder {
+                    dump.push_str(format!(" {:04X}", self.program[row_start + word]).as_str());
+                }
+                for _ in remainder..words_per_row {
+                    dump.push_str("     ");
+                }
+
+                dump.push_str(newline.as_str())
+            }
+        }
+
+        assert_eq!(dump.len(), expected_num_characters);
+        dump
     }
 
     pub fn hexdump_ram(&self, words_per_row: usize) -> String {

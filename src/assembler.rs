@@ -1,11 +1,10 @@
 use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
 use crate::{Register, Word};
-use pest::iterators::{Pair, Pairs};
+use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
 use std::collections::HashMap;
-
-type Opcode = u8;
+use tracing::trace;
 
 #[derive(Parser)]
 #[grammar = "assemble.pest"]
@@ -21,30 +20,27 @@ where
     let mut label_map = HashMap::new();
     for token in tokens.iter() {
         if let MetaInstruction::Label(label) = token {
-            if label_map.insert(label.clone(), 0xFFFFu16).is_some() {
+            if label_map.insert(label.clone(), 0x0000u16).is_some() {
                 panic!("Label '{}' defined multiple times", label);
             }
         }
     }
 
-    println!("{:?}", tokens);
-
     let mut instructions = Vec::new();
     let mut current_position: Word = 0x0000;
 
+    // First pass, materialize as many instructions as possible.
     for token in tokens {
         match token {
             MetaInstruction::Instruction(instruction) => {
-                let materialized = instruction.materialize();
-                if let Some(len) = materialized.len() {
-                    // We update the actual length.
-                    current_position += len as Word;
-                } else {
-                    // We assume the best-case situation here.
-                    // This is helpful because small values can be inlined
-                    // into the instruction.
-                    current_position += 1;
-                }
+                let materialized = instruction.materialize(&label_map);
+
+                // We assume the best-case situation here.
+                // This is helpful because small values can be inlined
+                // into the instruction.
+                let len = materialized.len();
+                current_position += len as Word;
+
                 instructions.push(materialized);
             }
             MetaInstruction::Label(label) => {
@@ -53,23 +49,134 @@ where
         }
     }
 
-    println!("{:?}", instructions);
+    // Second pass, attempt to materialize the "flexible" instructions.
+    let mut current_position: Word;
+    loop {
+        let mut replace_list = Vec::new();
+        current_position = 0x0000;
 
-    Vec::default()
+        for (i, entry) in instructions.iter().enumerate() {
+            let current_length = entry.len();
+            current_position += current_length as Word;
+
+            match entry {
+                MaterializedInstruction::Static { .. } => continue,
+                MaterializedInstruction::Flexible { instruction, .. } => {
+                    let new_instruction = instruction.materialize(&label_map);
+                    let new_length = new_instruction.len();
+
+                    let difference = new_length as i64 - current_length as i64;
+                    // assert!(difference >= 0);
+
+                    // If the instruction changed in size, we need to adjust all following
+                    // label positions.
+                    if difference != 0 {
+                        // Store the updated entry for later replacement in the list.
+                        replace_list.push((i, new_instruction));
+
+                        // Update the labels.
+                        for (_label, label_pos) in label_map.iter_mut() {
+                            if *label_pos > current_position {
+                                *label_pos = (*label_pos as i64 + difference) as Word;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no instruction was replaced we achieved an optimum.
+        if replace_list.len() == 0 {
+            break;
+        }
+
+        // Update the improved instructions.
+        for (idx, instruction) in replace_list {
+            instructions[idx] = instruction;
+        }
+    }
+
+    // Go through the instructions one last time and generate the byte stream.
+    let mut bytesteam = Vec::with_capacity(current_position as usize);
+    for entry in instructions {
+        write_materialized_instruction_into_bytestream(&mut bytesteam, entry, &mut label_map)
+    }
+
+    bytesteam
 }
 
+/// Writes a materialized instruction into the bytestream.
+/// A final pass of jump label address substitution is performed.
+fn write_materialized_instruction_into_bytestream(
+    mut bytesteam: &mut Vec<u16>,
+    entry: MaterializedInstruction,
+    label_map: &mut HashMap<String, u16>,
+) {
+    let length = entry.len();
+    match entry {
+        MaterializedInstruction::Static {
+            instruction,
+            instruction_word,
+            arg1,
+            arg2,
+        } => {
+            trace!(
+                "instruction {instruction:?}, len = {words}",
+                instruction = instruction,
+                words = length
+            );
+            write_instruction_word_into_bytestream(&mut bytesteam, instruction_word, arg1, arg2)
+        }
+        MaterializedInstruction::Flexible { instruction, .. } => {
+            // We perform a final pass of baking the actual jump addresses
+            // into the instructions.
+            if let MaterializedInstruction::Flexible {
+                instruction,
+                instruction_word,
+                arg1,
+                arg2,
+            } = instruction.materialize(&label_map)
+            {
+                trace!(
+                    "instruction {instruction:?}, len = {words}",
+                    instruction = instruction,
+                    words = length
+                );
+                write_instruction_word_into_bytestream(&mut bytesteam, instruction_word, arg1, arg2)
+            } else {
+                unreachable!();
+            }
+        }
+    }
+}
+
+/// Writes an individual instruction word into the bytestream.
+fn write_instruction_word_into_bytestream(
+    bytesteam: &mut Vec<u16>,
+    instruction_word: u16,
+    arg1: Option<u16>,
+    arg2: Option<u16>,
+) {
+    bytesteam.push(instruction_word);
+    if arg1.is_some() {
+        bytesteam.push(arg1.unwrap());
+    }
+    if arg2.is_some() {
+        bytesteam.push(arg2.unwrap());
+    }
+}
+
+/// Parses the source and generates a stream of [`MetaInstruction`] instances.
 fn get_meta_instructions<T>(source: T) -> Vec<MetaInstruction>
 where
     T: AsRef<str>,
 {
+    // Get the top-level program rule.
     let mut program =
         AssembleParser::parse(Rule::program, source.as_ref()).expect("unsuccessful parse");
-
-    // Get the top-level program rule.
     let program = program.next().unwrap();
 
-    let mut tokens = Vec::new();
-
+    let mut meta_instructions = Vec::new();
     for record in program.into_inner() {
         let token = match record.as_rule() {
             Rule::label => {
@@ -112,11 +219,13 @@ where
             }
         };
 
-        tokens.push(token);
+        meta_instructions.push(token);
     }
-    tokens
+    meta_instructions
 }
 
+/// A [`MetaInstruction`] captures the both instruction and
+/// jump label definitions in the original token stream.
 #[derive(Debug, Clone)]
 enum MetaInstruction {
     /// An instruction.
@@ -125,6 +234,7 @@ enum MetaInstruction {
     Label(String),
 }
 
+/// An actual instruction with both its operands.
 #[derive(Debug, Clone)]
 enum Instruction {
     /// A basic (two-operand) instruction.
@@ -133,6 +243,8 @@ enum Instruction {
     NonBasicInstruction(NonBasicOperationName, Value),
 }
 
+/// A [`Value`] may either refer to an actual argument or
+/// a reference to a label.
 #[derive(Debug, Clone)]
 enum Value {
     /// A value.
@@ -165,7 +277,7 @@ impl BasicOperationName {
         &self,
         a: InstructionArgument,
         b: InstructionArgument,
-    ) -> (Opcode, Option<Word>, Option<Word>) {
+    ) -> (Word, Option<Word>, Option<Word>) {
         let opcode = match self {
             Self::SET => 0x1,
             Self::ADD => 0x2,
@@ -189,7 +301,7 @@ impl BasicOperationName {
 
         let instruction = ((opcode & 0b1111)
             | ((a_baked.inline as u32 & 0b111_111) << 4)
-            | ((b_baked.inline as u32 & 0b111_111) << 10)) as Opcode;
+            | ((b_baked.inline as u32 & 0b111_111) << 10)) as Word;
         if a_baked.literal.is_some() {
             (instruction, a_baked.literal, b_baked.literal)
         } else {
@@ -199,7 +311,7 @@ impl BasicOperationName {
 }
 
 impl NonBasicOperationName {
-    fn bake(&self, a: InstructionArgument) -> (Opcode, Option<Word>) {
+    fn bake(&self, a: InstructionArgument) -> (Word, Option<Word>) {
         let opcode = match self {
             Self::JSR => 0x1,
         };
@@ -207,7 +319,7 @@ impl NonBasicOperationName {
         let a_baked = a.bake();
 
         let instruction = (((opcode as u32 & 0b111_111) << 4)
-            | ((a_baked.inline as u32 & 0b111_111) << 10)) as Opcode;
+            | ((a_baked.inline as u32 & 0b111_111) << 10)) as Word;
         (instruction, a_baked.literal)
     }
 }
@@ -295,6 +407,7 @@ fn parse_basic_operation(pair: Pair<Rule>) -> BasicOperationName {
         "DIV" => BasicOperationName::DIV,
         "MOD" => BasicOperationName::MOD,
         "SHL" => BasicOperationName::SHL,
+        "SHR" => BasicOperationName::SHR,
         "AND" => BasicOperationName::AND,
         "BOR" => BasicOperationName::BOR,
         "XOR" => BasicOperationName::XOR,
@@ -330,7 +443,11 @@ fn parse_value(pair: Pair<Rule>) -> Value {
 }
 
 fn parse_register(pair: Pair<Rule>) -> Value {
-    let register = match pair.as_str() {
+    Value::Static(InstructionArgument::Register(parse_register_raw(pair)))
+}
+
+fn parse_register_raw(pair: Pair<Rule>) -> Register {
+    match pair.as_str() {
         "A" => Register::A,
         "B" => Register::B,
         "C" => Register::C,
@@ -340,32 +457,62 @@ fn parse_register(pair: Pair<Rule>) -> Value {
         "I" => Register::I,
         "J" => Register::J,
         _ => unreachable!(),
-    };
-
-    Value::Static(InstructionArgument::Register(register))
+    }
 }
 
 fn parse_literal(pair: Pair<Rule>) -> Value {
     let item = pair.into_inner().next().unwrap();
-    let word = match item.as_rule() {
-        Rule::value_dec => {
-            u16::from_str_radix(item.as_str(), 10).expect("invalid format for decimal literal")
-        }
-        Rule::value_hex => u16::from_str_radix(item.as_str().trim_start_matches("0x"), 16)
-            .expect("invalid format for hex literal"),
-        _ => unreachable!(),
-    };
+    let word = parse_literal_raw(item);
     Value::Static(InstructionArgument::Literal(word))
 }
 
+fn parse_literal_raw(pair: Pair<Rule>) -> Word {
+    match pair.as_rule() {
+        Rule::value_dec => {
+            u16::from_str_radix(pair.as_str(), 10).expect("invalid format for decimal literal")
+        }
+        Rule::value_hex => u16::from_str_radix(pair.as_str().trim_start_matches("0x"), 16)
+            .expect("invalid format for hex literal"),
+        _ => unreachable!(),
+    }
+}
+
 fn parse_address(pair: Pair<Rule>) -> Value {
-    Value::Static(InstructionArgument::Address(0xdead))
+    let mut address = pair.into_inner();
+
+    // Skip opening bracket.
+    address.next();
+
+    let literal = address.next().unwrap();
+    match literal.as_rule() {
+        Rule::literal => {
+            let item = literal.into_inner().next().unwrap();
+            let word = parse_literal_raw(item);
+            Value::Static(InstructionArgument::Address(word))
+        }
+        Rule::register => {
+            let register = parse_register_raw(literal);
+            Value::Static(InstructionArgument::AddressFromRegister(register))
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn parse_address_with_offset(pair: Pair<Rule>) -> Value {
+    let mut address = pair.into_inner();
+
+    // Skip opening bracket.
+    address.next();
+
+    let literal = address.next().unwrap().into_inner().next().unwrap();
+    let register = address.next().unwrap();
+
+    let base = parse_literal_raw(literal);
+    let offset = parse_register_raw(register);
+
     let arg = InstructionArgument::AddressOffset {
-        address: 0x1337,
-        register: Register::A,
+        address: base,
+        register: offset,
     };
     Value::Static(arg)
 }
@@ -404,21 +551,28 @@ fn parse_label_ref(pair: Pair<Rule>) -> Value {
 enum MaterializedInstruction {
     /// An instruction that is fixed in size.
     Static {
-        opcode: Opcode,
+        instruction: Instruction,
+        instruction_word: Word,
         arg1: Option<Word>,
         arg2: Option<Word>,
     },
     /// An instruction that is flexible in size, e.g. because
     /// it corresponds to a jump label that could be represented as
     /// an inline literal.
-    Flexible { instruction: Instruction },
+    Flexible {
+        instruction: Instruction,
+        instruction_word: Word,
+        arg1: Option<Word>,
+        arg2: Option<Word>,
+    },
 }
 
 impl MaterializedInstruction {
-    fn len(&self) -> Option<usize> {
+    fn len(&self) -> usize {
         match self {
             Self::Static {
-                opcode: _,
+                instruction: _,
+                instruction_word: _,
                 arg1,
                 arg2,
             } => {
@@ -429,40 +583,83 @@ impl MaterializedInstruction {
                 if arg2.is_some() {
                     size += 1;
                 }
-                Some(size)
+                size
             }
-            _ => None,
+            Self::Flexible {
+                instruction: _,
+                instruction_word: _,
+                arg1,
+                arg2,
+            } => {
+                let mut size = 1;
+                if arg1.is_some() {
+                    size += 1;
+                }
+                if arg2.is_some() {
+                    size += 1;
+                }
+                size
+            }
         }
     }
 }
 
 impl Instruction {
-    fn materialize(&self) -> MaterializedInstruction {
+    fn materialize(&self, label_map: &HashMap<String, Word>) -> MaterializedInstruction {
         match self {
             Instruction::NonBasicInstruction(nbi, a) => {
-                if let Value::Static(arg) = a {
-                    let (opcode, arg1) = nbi.bake(*arg);
-                    MaterializedInstruction::Static {
-                        opcode,
-                        arg1,
-                        arg2: None,
+                match a {
+                    Value::Static(arg) => {
+                        let (opcode, arg1) = nbi.bake(*arg);
+                        MaterializedInstruction::Static {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2: None,
+                        }
                     }
-                } else {
-                    MaterializedInstruction::Flexible {
-                        instruction: self.clone(),
+                    Value::LabelReference(reference) => {
+                        // We now optimistically generate the instruction based on the current
+                        // best guess for the label address in the label map.
+                        let address = label_map[reference];
+                        let arg = InstructionArgument::Literal(address);
+                        let (opcode, arg1) = nbi.bake(arg);
+
+                        MaterializedInstruction::Flexible {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2: None,
+                        }
                     }
                 }
             }
             Instruction::BasicInstruction(bi, a, b) => {
                 // Both arguments must be fixed-sized for this to be static.
                 if let Value::Static(arg1) = a {
-                    if let Value::Static(arg2) = b {
-                        let (opcode, arg1, arg2) = bi.bake(*arg1, *arg2);
-                        MaterializedInstruction::Static { opcode, arg1, arg2 }
-                    } else {
-                        // b is a label reference, skip.
-                        MaterializedInstruction::Flexible {
-                            instruction: self.clone(),
+                    match b {
+                        Value::Static(arg2) => {
+                            let (opcode, arg1, arg2) = bi.bake(*arg1, *arg2);
+                            MaterializedInstruction::Static {
+                                instruction: self.clone(),
+                                instruction_word: opcode,
+                                arg1,
+                                arg2,
+                            }
+                        }
+                        Value::LabelReference(reference) => {
+                            // We now optimistically generate the instruction based on the current
+                            // best guess for the label address in the label map.
+                            let address = label_map[reference];
+                            let arg2 = InstructionArgument::Literal(address);
+                            let (opcode, arg1, arg2) = bi.bake(*arg1, arg2);
+
+                            MaterializedInstruction::Flexible {
+                                instruction: self.clone(),
+                                instruction_word: opcode,
+                                arg1,
+                                arg2,
+                            }
                         }
                     }
                 } else {
