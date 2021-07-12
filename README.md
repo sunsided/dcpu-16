@@ -6,12 +6,14 @@ An emulator for the DCPU-16 16-bit processor described for the
 The [DCPU-16 Specification](docs/specification.txt) is no longer available on the
 original website (as is the entire website) but still can be obtained from the [Wayback Machine].
 
+An implementation of a DCPU-16 assembler is also provided in this repo and is built by default through 
+the crate's `assembler` feature.
+
 ---
 
-Cycle counts are currently not emulated. This project also does not contain an
-assembler, i.e., the program must be provided as bytecode. 
+Cycle counts are currently not emulated.
 
-## Example use
+## Example execution
 
 See [examples/sample.rs] for a commented example application. Here's a sneak peek:
 
@@ -147,6 +149,96 @@ DEBUG dcpu16: EXEC 001A: 7dc1 001a ; SET PC, 0x1A ("PC <- 0x1A")
 ```
 
 After the execution, the `X` register contains the word `0040` as expected (by the specification).
+
+## Example compilation
+
+See [examples/sample.rs] for a commented example application. It can be started with
+
+```console
+RUST_LOG=dcpu16=trace cargo run --example assemble
+```
+
+Here's some example code:
+
+```rust
+use dcpu16::{assemble, Register, DCPU16};
+
+fn main() {
+    tracing_subscriber::fmt::init();
+
+    let source = r"
+        ; Try some basic stuff
+                      SET A, 0x30              ; 7c01 0030
+                      SET [0x1000], 0x20       ; 7de1 1000 0020
+                      SUB A, [0x1000]          ; 7803 1000
+                      IFN A, 0x10              ; c00d
+                         SET PC, crash         ; d9c1*
+
+        ; Do a loopy thing
+                      SET I, 10                ; a861
+                      SET A, 0x2000            ; 7c01 2000
+        :loop         SET [0x2000+I], [A]      ; 2161 2000
+                      SUB I, 1                 ; 8463
+                      IFN I, 0                 ; 806d
+                         SET PC, loop          ; b1c1*
+
+        ; Call a subroutine
+                      SET X, 0x4               ; 9031
+                      JSR testsub              ; d010*
+                      SET PC, crash            ; d9c1*
+
+        :testsub      SHL X, 4                 ; 9037
+                      SET PC, POP              ; 61c1
+
+        ; Hang forever. X should now be 0x40 if everything went right.
+        :crash        SET PC, crash            ; d9c1*
+    ";
+
+    let program = assemble(&source);
+
+    let mut cpu = DCPU16::new(program.as_slice());
+    println!("{}", cpu.hexdump_program(8));
+
+    cpu.run();
+
+    // The last instruction perform a crash loop by jumping to itself (SET PC, 0x0016).
+    // The length of that operation is one word, hence the following assertion.
+    assert_eq!(cpu.program_counter, (program.len() - 1) as u16);
+}
+```
+
+Here's the hexdump of the generated program. Note that this code is shorter
+than the provided original bytecode due to inlining of small constants;
+for example, the `:crash SET PC, crash` instruction is rendered as `7dc1 001a`
+in the original code but represented using `d9c1` in this output:
+
+```hexdump
+0000: 7C01 0030 7DE1 1000 0020 7803 1000 C00D
+0008: D9C1 A861 7C01 2000 2161 2000 8463 806D
+0010: B1C1 9031 D010 D9C1 9037 61C1 D9C1
+```
+
+This is the tracing output of the assembler:
+
+```
+TRACE dcpu16::assembler: instruction Basic(SET, Register(A), Static(Literal(48))), len = 2
+TRACE dcpu16::assembler: instruction Basic(SET, Address(4096), Static(Literal(32))), len = 3
+TRACE dcpu16::assembler: instruction Basic(SUB, Register(A), Static(Address(4096))), len = 2
+TRACE dcpu16::assembler: instruction Basic(IFN, Register(A), Static(Literal(16))), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, Register(I), Static(Literal(10))), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, Register(A), Static(Literal(8192))), len = 2
+TRACE dcpu16::assembler: instruction Basic(SET, AddressOffset { address: 8192, register: I }, Static(AddressFromRegister(A))), len = 2
+TRACE dcpu16::assembler: instruction Basic(SUB, Register(I), Static(Literal(1))), len = 1
+TRACE dcpu16::assembler: instruction Basic(IFN, Register(I), Static(Literal(0))), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("loop")), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, Register(X), Static(Literal(4))), len = 1
+TRACE dcpu16::assembler: instruction NonBasic(JSR, LabelReference("testsub")), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+TRACE dcpu16::assembler: instruction Basic(SHL, Register(X), Static(Literal(4))), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), Static(StackOperation(Pop))), len = 1
+TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+```
 
 [0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c
 [DCPU-16 Specification]: docs/specification.txt

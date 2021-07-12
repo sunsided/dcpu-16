@@ -38,7 +38,7 @@ where
                 // We assume the best-case situation here.
                 // This is helpful because small values can be inlined
                 // into the instruction.
-                let len = materialized.len();
+                let len = materialized.len_estimate();
                 current_position += len as Word;
 
                 instructions.push(materialized);
@@ -56,14 +56,14 @@ where
         current_position = 0x0000;
 
         for (i, entry) in instructions.iter().enumerate() {
-            let current_length = entry.len();
+            let current_length = entry.len_estimate();
             current_position += current_length as Word;
 
             match entry {
                 MaterializedInstruction::Static { .. } => continue,
                 MaterializedInstruction::Flexible { instruction, .. } => {
                     let new_instruction = instruction.materialize(&label_map);
-                    let new_length = new_instruction.len();
+                    let new_length = new_instruction.len_estimate();
 
                     let difference = new_length as i64 - current_length as i64;
                     // assert!(difference >= 0);
@@ -112,7 +112,7 @@ fn write_materialized_instruction_into_bytestream(
     entry: MaterializedInstruction,
     label_map: &mut HashMap<String, u16>,
 ) {
-    let length = entry.len();
+    let length = entry.len_estimate();
     match entry {
         MaterializedInstruction::Static {
             instruction,
@@ -194,7 +194,7 @@ where
                 let value_a = parse_instruction_argument(a);
                 let value_b = parse_value(b);
 
-                let instruction = Instruction::BasicInstruction(operation, value_a, value_b);
+                let instruction = Instruction::Basic(operation, value_a, value_b);
                 MetaInstruction::Instruction(instruction)
             }
             Rule::nonbasic_instruction => {
@@ -207,7 +207,7 @@ where
                 let operation = parse_nonbasic_operation(op);
                 let value_a = parse_value(a);
 
-                let instruction = Instruction::NonBasicInstruction(operation, value_a);
+                let instruction = Instruction::NonBasic(operation, value_a);
                 MetaInstruction::Instruction(instruction)
             }
             Rule::EOI => {
@@ -238,9 +238,9 @@ enum MetaInstruction {
 #[derive(Debug, Clone)]
 enum Instruction {
     /// A basic (two-operand) instruction.
-    BasicInstruction(BasicOperationName, InstructionArgument, Value),
+    Basic(BasicOperationName, InstructionArgument, Value),
     /// A non-basic (one-operand) instruction.
-    NonBasicInstruction(NonBasicOperationName, Value),
+    NonBasic(NonBasicOperationName, Value),
 }
 
 /// A [`Value`] may either refer to an actual argument or
@@ -253,6 +253,7 @@ enum Value {
     LabelReference(String),
 }
 
+/// A basic operation with two arguments.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum BasicOperationName {
     SET,
@@ -272,7 +273,13 @@ enum BasicOperationName {
     IFB,
 }
 
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+enum NonBasicOperationName {
+    JSR,
+}
+
 impl BasicOperationName {
+    /// Bakes the instruction and its arguments into bytecode.
     fn bake(
         &self,
         a: InstructionArgument,
@@ -296,8 +303,8 @@ impl BasicOperationName {
             Self::IFB => 0xF,
         };
 
-        let a_baked = a.bake();
-        let b_baked = b.bake();
+        let a_baked = a.bake_argument();
+        let b_baked = b.bake_argument();
 
         let instruction = ((opcode & 0b1111)
             | ((a_baked.inline as u32 & 0b111_111) << 4)
@@ -311,12 +318,13 @@ impl BasicOperationName {
 }
 
 impl NonBasicOperationName {
+    /// Bakes the instruction and its arguments into bytecode.
     fn bake(&self, a: InstructionArgument) -> (Word, Option<Word>) {
         let opcode = match self {
             Self::JSR => 0x1,
         };
 
-        let a_baked = a.bake();
+        let a_baked = a.bake_argument();
 
         let instruction = (((opcode as u32 & 0b111_111) << 4)
             | ((a_baked.inline as u32 & 0b111_111) << 10)) as Word;
@@ -324,13 +332,18 @@ impl NonBasicOperationName {
     }
 }
 
+/// A value has an inline component and may additional
+/// refer to an extra word.
 struct MaterializedValue {
+    /// The inline component that is embedded into the instruction word.
     pub inline: u8,
+    /// The optional additional word.
     pub literal: Option<Word>,
 }
 
 impl InstructionArgument {
-    fn bake(&self) -> MaterializedValue {
+    /// Bakes the argument into a [`MaterializedValue`].
+    fn bake_argument(&self) -> MaterializedValue {
         match self {
             Self::Register(register) => MaterializedValue {
                 inline: (*register as usize + 0x00) as u8,
@@ -393,9 +406,134 @@ impl InstructionArgument {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-enum NonBasicOperationName {
-    JSR,
+/// Helper value that represents an instruction prior to being baked into
+/// the bytestream.
+///
+/// At this point the instructions are generally clear, but due to the possibility of inlining
+/// of small constants into the instruction word all addresses referring to jump labels need
+/// to be known and iteratively optimized before the final instruction can be written.
+/// The [`MaterializedInstruction::Flexible`] variant captures this notion.
+#[derive(Debug)]
+enum MaterializedInstruction {
+    /// An instruction that is fixed in size.
+    Static {
+        instruction: Instruction,
+        instruction_word: Word,
+        arg1: Option<Word>,
+        arg2: Option<Word>,
+    },
+    /// An instruction that is flexible in size, e.g. because
+    /// it corresponds to a jump label that could be represented as
+    /// an inline literal.
+    Flexible {
+        instruction: Instruction,
+        instruction_word: Word,
+        arg1: Option<Word>,
+        arg2: Option<Word>,
+    },
+}
+
+impl MaterializedInstruction {
+    /// Gets the length of the instruction in words.
+    /// For the [`MaterializedInstruction::Flexible`] variant a
+    /// best-case estimate is provided.
+    fn len_estimate(&self) -> usize {
+        match self {
+            Self::Static {
+                instruction: _,
+                instruction_word: _,
+                arg1,
+                arg2,
+            } => {
+                let mut size = 1;
+                if arg1.is_some() {
+                    size += 1;
+                }
+                if arg2.is_some() {
+                    size += 1;
+                }
+                size
+            }
+            Self::Flexible {
+                instruction: _,
+                instruction_word: _,
+                arg1,
+                arg2,
+            } => {
+                let mut size = 1;
+                if arg1.is_some() {
+                    size += 1;
+                }
+                if arg2.is_some() {
+                    size += 1;
+                }
+                size
+            }
+        }
+    }
+}
+
+impl Instruction {
+    /// Materializes an instruction given the map of jump labels to program addresses.
+    fn materialize(&self, label_map: &HashMap<String, Word>) -> MaterializedInstruction {
+        match self {
+            Instruction::NonBasic(nbi, a) => {
+                match a {
+                    Value::Static(arg) => {
+                        let (opcode, arg1) = nbi.bake(*arg);
+                        MaterializedInstruction::Static {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2: None,
+                        }
+                    }
+                    Value::LabelReference(reference) => {
+                        // We now optimistically generate the instruction based on the current
+                        // best guess for the label address in the label map.
+                        let address = label_map[reference];
+                        let arg = InstructionArgument::Literal(address);
+                        let (opcode, arg1) = nbi.bake(arg);
+
+                        MaterializedInstruction::Flexible {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2: None,
+                        }
+                    }
+                }
+            }
+            Instruction::Basic(bi, a, b) => {
+                // Both arguments must be fixed-sized for this to be static.
+                match b {
+                    Value::Static(arg2) => {
+                        let (opcode, arg1, arg2) = bi.bake(*a, *arg2);
+                        MaterializedInstruction::Static {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2,
+                        }
+                    }
+                    Value::LabelReference(reference) => {
+                        // We now optimistically generate the instruction based on the current
+                        // best guess for the label address in the label map.
+                        let address = label_map[reference];
+                        let arg2 = InstructionArgument::Literal(address);
+                        let (opcode, arg1, arg2) = bi.bake(*a, arg2);
+
+                        MaterializedInstruction::Flexible {
+                            instruction: self.clone(),
+                            instruction_word: opcode,
+                            arg1,
+                            arg2,
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn parse_basic_operation(pair: Pair<Rule>) -> BasicOperationName {
@@ -552,123 +690,4 @@ fn parse_stack_op(pair: Pair<Rule>) -> Value {
 
 fn parse_label_ref(pair: Pair<Rule>) -> Value {
     Value::LabelReference(String::from(pair.as_str()))
-}
-
-#[derive(Debug)]
-enum MaterializedInstruction {
-    /// An instruction that is fixed in size.
-    Static {
-        instruction: Instruction,
-        instruction_word: Word,
-        arg1: Option<Word>,
-        arg2: Option<Word>,
-    },
-    /// An instruction that is flexible in size, e.g. because
-    /// it corresponds to a jump label that could be represented as
-    /// an inline literal.
-    Flexible {
-        instruction: Instruction,
-        instruction_word: Word,
-        arg1: Option<Word>,
-        arg2: Option<Word>,
-    },
-}
-
-impl MaterializedInstruction {
-    fn len(&self) -> usize {
-        match self {
-            Self::Static {
-                instruction: _,
-                instruction_word: _,
-                arg1,
-                arg2,
-            } => {
-                let mut size = 1;
-                if arg1.is_some() {
-                    size += 1;
-                }
-                if arg2.is_some() {
-                    size += 1;
-                }
-                size
-            }
-            Self::Flexible {
-                instruction: _,
-                instruction_word: _,
-                arg1,
-                arg2,
-            } => {
-                let mut size = 1;
-                if arg1.is_some() {
-                    size += 1;
-                }
-                if arg2.is_some() {
-                    size += 1;
-                }
-                size
-            }
-        }
-    }
-}
-
-impl Instruction {
-    fn materialize(&self, label_map: &HashMap<String, Word>) -> MaterializedInstruction {
-        match self {
-            Instruction::NonBasicInstruction(nbi, a) => {
-                match a {
-                    Value::Static(arg) => {
-                        let (opcode, arg1) = nbi.bake(*arg);
-                        MaterializedInstruction::Static {
-                            instruction: self.clone(),
-                            instruction_word: opcode,
-                            arg1,
-                            arg2: None,
-                        }
-                    }
-                    Value::LabelReference(reference) => {
-                        // We now optimistically generate the instruction based on the current
-                        // best guess for the label address in the label map.
-                        let address = label_map[reference];
-                        let arg = InstructionArgument::Literal(address);
-                        let (opcode, arg1) = nbi.bake(arg);
-
-                        MaterializedInstruction::Flexible {
-                            instruction: self.clone(),
-                            instruction_word: opcode,
-                            arg1,
-                            arg2: None,
-                        }
-                    }
-                }
-            }
-            Instruction::BasicInstruction(bi, a, b) => {
-                // Both arguments must be fixed-sized for this to be static.
-                match b {
-                    Value::Static(arg2) => {
-                        let (opcode, arg1, arg2) = bi.bake(*a, *arg2);
-                        MaterializedInstruction::Static {
-                            instruction: self.clone(),
-                            instruction_word: opcode,
-                            arg1,
-                            arg2,
-                        }
-                    }
-                    Value::LabelReference(reference) => {
-                        // We now optimistically generate the instruction based on the current
-                        // best guess for the label address in the label map.
-                        let address = label_map[reference];
-                        let arg2 = InstructionArgument::Literal(address);
-                        let (opcode, arg1, arg2) = bi.bake(*a, arg2);
-
-                        MaterializedInstruction::Flexible {
-                            instruction: self.clone(),
-                            instruction_word: opcode,
-                            arg1,
-                            arg2,
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
