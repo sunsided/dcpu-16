@@ -152,7 +152,7 @@ After the execution, the `X` register contains the word `0040` as expected (by t
 
 ## Example compilation
 
-See [examples/sample.rs] for a commented example application. It can be started with
+See [examples/assemble.rs] for a commented example application. It can be started with
 
 ```console
 RUST_LOG=dcpu16=trace cargo run --example assemble
@@ -244,3 +244,4 @@ TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter),
 [DCPU-16 Specification]: docs/specification.txt
 [Wayback Machine]: http://web.archive.org/web/20120504005858/http://0x10c.com/doc/dcpu-16.txt
 [examples/sample.rs]: examples/sample.rs
+[examples/assemble.rs]: examples/assemble.rs
