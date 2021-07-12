@@ -11,7 +11,8 @@ stmt = _{
 commented_expr = _{ expr ~ WHITE_SPACE* ~ comment }
 
 nonl = _{ !NEWLINE ~ ANY }
-comment = { ";" ~ nonl* }
+comment_token = _{ ";" }
+comment = _{ comment_token ~ nonl* }
 
 labeled_instruction = _{ label ~ WHITE_SPACE+ ~ instruction }
 
@@ -36,12 +37,12 @@ value_or_label_ref = _{
 }
 
 value = _{
-      literal
-    | register
+      register
+    | stack_op
+    | special_register
+    | literal
     | address
     | address_with_offset
-    | special_register
-    | stack_op
 }
 
 literal = {
@@ -81,7 +82,8 @@ value_dec = { ASCII_DIGIT{1,5} }
 nonl_lbl = _{ !NEWLINE ~ ASCII_ALPHANUMERIC }
 label_name = { nonl_lbl+ }
 label_ref = { label_name }
-label = { ":" ~ label_name }
+label_token = _{ ":" }
+label = { label_token ~ label_name }
 
 basic_operation = {
       "SET"
