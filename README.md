@@ -13,7 +13,7 @@ the crate's `assembler` feature.
 
 Cycle counts are currently not emulated.
 
-## Example execution
+## Example usage
 
 See [examples/sample.rs] for a commented example application. Here's a sneak peek:
 
@@ -42,7 +42,7 @@ fn main() {
 }
 ```
 
-## Example program execution
+### Running the emulation example
 
 The example program can be started with
 
@@ -150,7 +150,7 @@ DEBUG dcpu16: EXEC 001A: 7dc1 001a ; SET PC, 0x1A ("PC <- 0x1A")
 
 After the execution, the `X` register contains the word `0040` as expected (by the specification).
 
-## Example compilation
+### Running the assembly / compilation example
 
 See [examples/assemble.rs] for a commented example application. It can be started with
 
