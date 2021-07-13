@@ -1,4 +1,4 @@
-# DCPU-16 Emulator
+# DCPU-16 Emulator and Assembler
 
 An emulator for the DCPU-16 16-bit processor described for the 
 [0x10<sup>c</sup>] video game.
