@@ -161,7 +161,7 @@ RUST_LOG=dcpu16=trace cargo run --example assemble
 Here's some example code:
 
 ```rust
-use dcpu16::{assemble, Register, DCPU16};
+use dcpu16::{assemble, DCPU16};
 
 fn main() {
     tracing_subscriber::fmt::init();
