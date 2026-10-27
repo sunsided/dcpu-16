@@ -53,6 +53,11 @@ pub enum AssembleErrorKind {
     UndefinedLabel(String),
     /// A label reference in an operand position that does not accept one.
     LabelNotAllowed(String),
+    /// The assembled program would be longer than the emulator accepts.
+    ProgramTooLarge {
+        /// The maximum program length in words.
+        max_words: usize,
+    },
 }
 
 impl AssembleError {
@@ -93,6 +98,11 @@ impl Display for AssembleErrorKind {
             }
             Self::DuplicateLabel(name) => write!(f, "label `{}` is defined multiple times", name),
             Self::UndefinedLabel(name) => write!(f, "label `{}` is not defined", name),
+            Self::ProgramTooLarge { max_words } => write!(
+                f,
+                "program exceeds the maximum length of {} words",
+                max_words
+            ),
             Self::LabelNotAllowed(name) => write!(
                 f,
                 "label reference `{}` is only allowed as the last operand",

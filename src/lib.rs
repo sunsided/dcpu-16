@@ -34,6 +34,9 @@ const NUM_REGISTERS: usize = 8;
 /// Number of words of RAM.
 const NUM_RAM_WORDS: usize = 0x10000;
 
+/// Largest program, in words, that [`DCPU16::new`] accepts.
+const MAX_PROGRAM_WORDS: usize = u16::MAX as usize - 1;
+
 /// Initial stack pointer: the last RAM word, `0xffff`; the stack grows downwards.
 const STACK_POINTER_INIT: usize = NUM_RAM_WORDS - 1;
 
@@ -71,9 +74,9 @@ impl<'p> DCPU16<'p> {
     ///
     /// # Panics
     ///
-    /// Panics if the program does not fit into the 16-bit address space.
+    /// Panics if the program is longer than 65534 words.
     pub fn new(program: &'p [u16]) -> Self {
-        assert!(program.len() < u16::MAX as usize);
+        assert!(program.len() <= MAX_PROGRAM_WORDS);
         let cpu = Self {
             ram: Box::new([0; NUM_RAM_WORDS]),
             registers: [0; NUM_REGISTERS],

@@ -1,0 +1,59 @@
+# Fuzz tasks for the assembler; included from the root Taskfile as `fuzz:`.
+# https://taskfile.dev
+version: '3'
+
+vars:
+  TARGETS: assemble assemble_valid
+  TARGET: '{{ .TARGET | default "assemble" }}'
+  SECONDS: '{{ .SECONDS | default "30" }}'
+
+tasks:
+  list:
+    desc: List the fuzz targets
+    preconditions: &fuzz
+      - sh: rustup toolchain list | grep -q nightly
+        msg: "Rust nightly toolchain required — rustup toolchain install nightly"
+      - sh: command -v cargo-fuzz
+        msg: "cargo-fuzz not found — cargo install cargo-fuzz"
+    cmds:
+      - cargo +nightly fuzz list
+
+  build:
+    desc: Build all fuzz targets
+    preconditions: *fuzz
+    cmds:
+      - cargo +nightly fuzz build
+
+  run:
+    desc: Fuzz one target until stopped (TARGET=assemble|assemble_valid, libFuzzer flags after --)
+    preconditions: *fuzz
+    requires:
+      vars:
+        - name: TARGET
+          enum: [assemble, assemble_valid]
+    cmds:
+      - cargo +nightly fuzz run {{.TARGET}} -- -dict=assembler.dict {{.CLI_ARGS}}
+
+  smoke:
+    desc: Fuzz every target briefly (SECONDS per target, default 30)
+    preconditions: *fuzz
+    cmds:
+      - for: { var: TARGETS }
+        cmd: cargo +nightly fuzz run {{.ITEM}} -- -dict=assembler.dict -max_total_time={{.SECONDS}}
+
+  fmt:
+    desc: Format the fuzz targets
+    cmds:
+      - cargo fmt --all
+
+  fmt:check:
+    desc: Check formatting of the fuzz targets
+    cmds:
+      - cargo fmt --all -- --check
+
+  clean:
+    desc: Remove fuzz build artifacts, corpora and crash artifacts
+    preconditions: *fuzz
+    cmds:
+      - cargo +nightly fuzz clean
+      - rm -rf corpus artifacts

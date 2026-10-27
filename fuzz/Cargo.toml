@@ -1,0 +1,32 @@
+[package]
+name = "dcpu16-fuzz"
+version = "0.0.0"
+description = "Fuzz targets for the dcpu16 assembler"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1.5.0", features = ["derive"] }
+dcpu16 = { path = ".." }
+libfuzzer-sys = "0.4.13"
+
+# Keep the fuzz crate out of any parent workspace.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "assemble"
+path = "fuzz_targets/assemble.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "assemble_valid"
+path = "fuzz_targets/assemble_valid.rs"
+test = false
+doc = false
+bench = false

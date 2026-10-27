@@ -1,6 +1,11 @@
 # https://taskfile.dev
 version: '3'
 
+includes:
+  fuzz:
+    taskfile: fuzz/Taskfile.dist.yaml
+    dir: fuzz
+
 vars:
   RUST_LOG: '{{ .RUST_LOG | default "dcpu16=trace" }}'
 
@@ -19,12 +24,14 @@ tasks:
         msg: "cargo not found — install Rust from https://rustup.rs/"
     cmds:
       - cargo fmt --all
+      - task: fuzz:fmt
 
   fmt:check:
     desc: Check formatting without modifying files
     preconditions: *cargo
     cmds:
       - cargo fmt --all -- --check
+      - task: fuzz:fmt:check
 
   lint:
     desc: Run clippy on all targets and features (warnings as errors)
@@ -67,10 +74,11 @@ tasks:
       - task: fmt:check
 
   build:
-    desc: Build library and examples (debug)
+    desc: Build library and examples (debug), then check the fuzz targets still compile
     preconditions: *cargo
     cmds:
       - cargo build --all-targets
+      - task: fuzz:build
 
   build:release:
     desc: Build library and examples (release)
@@ -106,6 +114,14 @@ tasks:
       RUST_LOG: '{{.RUST_LOG}}'
     cmds:
       - cargo run --example sample
+
+  fuzz:
+    desc: Fuzz the assembler until stopped (TARGET=assemble|assemble_valid, libFuzzer flags after --)
+    cmds:
+      - task: fuzz:run
+        vars:
+          TARGET: '{{.TARGET}}'
+          CLI_ARGS: '{{.CLI_ARGS}}'
 
   docs:
     desc: Build rustdoc
