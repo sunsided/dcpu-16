@@ -50,12 +50,18 @@ pub(super) fn tokenize(source: &str) -> Result<Vec<Token<'_>>, AssembleError> {
         let position = lexer.position;
 
         let kind = match c {
-            '\n' => {
+            // LF, CRLF and a lone CR each end a line; the CR of a CRLF pair is skipped
+            // so the pair yields a single newline.
+            '\r' if lexer.peek_second() == Some('\n') => {
+                lexer.bump();
+                continue;
+            }
+            '\n' | '\r' => {
                 lexer.bump();
                 TokenKind::Newline
             }
             ';' => {
-                lexer.bump_while(|c| c != '\n');
+                lexer.bump_while(|c| c != '\n' && c != '\r');
                 continue;
             }
             c if c.is_whitespace() => {
@@ -116,11 +122,17 @@ impl<'a> Lexer<'a> {
         self.source[self.offset..].chars().next()
     }
 
+    /// Returns the character after the next one without consuming anything.
+    fn peek_second(&self) -> Option<char> {
+        self.source[self.offset..].chars().nth(1)
+    }
+
     /// Consumes one character, updating line and column.
     fn bump(&mut self) {
         if let Some(c) = self.peek() {
+            let ends_line = c == '\n' || (c == '\r' && self.peek_second() != Some('\n'));
             self.offset += c.len_utf8();
-            if c == '\n' {
+            if ends_line {
                 self.position.line += 1;
                 self.position.column = 1;
             } else {

@@ -116,6 +116,47 @@ fn accepts_crlf_and_trailing_whitespace() {
 }
 
 #[test]
+fn accepts_lone_carriage_return_line_endings() {
+    assert_eq!(
+        assemble("SET A, 1 ; one\rSET B, 2\r\rSET C, 3").unwrap(),
+        [0x8401, 0x8811, 0x8c21]
+    );
+}
+
+#[test]
+fn reports_positions_after_lone_carriage_returns() {
+    assert_eq!(
+        error("SET A, 1\r\rMOV A, 1"),
+        (
+            AssembleErrorKind::UnknownInstruction("MOV".into()),
+            at(3, 1)
+        )
+    );
+}
+
+#[test]
+fn accepts_underscores_in_label_names() {
+    assert_eq!(
+        assemble(":my_label SET PC, my_label").unwrap(),
+        assemble(":mylabel SET PC, mylabel").unwrap()
+    );
+}
+
+#[test]
+fn reports_end_of_line_on_the_offending_line() {
+    assert_eq!(
+        error("SET A, 1\n\nJSR"),
+        (
+            AssembleErrorKind::Expected {
+                expected: "an operand",
+                found: "end of line".into()
+            },
+            at(3, 4)
+        )
+    );
+}
+
+#[test]
 fn labels_may_start_with_register_names() {
     // A greedy register match must not swallow the start of a label name.
     assert_eq!(

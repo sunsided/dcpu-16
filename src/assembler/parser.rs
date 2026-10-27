@@ -18,8 +18,10 @@ pub(super) fn parse(source: &str) -> Result<Vec<MetaInstruction>, AssembleError>
     let mut defined_labels = HashSet::new();
     let mut label_references = Vec::new();
 
-    for line in tokens.split(|t| t.kind == TokenKind::Newline) {
+    // Every line break yields exactly one newline token, so the n-th slice is line n + 1.
+    for (index, line) in tokens.split(|t| t.kind == TokenKind::Newline).enumerate() {
         let mut parser = LineParser {
+            line: index + 1,
             tokens: line,
             index: 0,
             label_references: &mut label_references,
@@ -56,6 +58,8 @@ pub(super) fn parse(source: &str) -> Result<Vec<MetaInstruction>, AssembleError>
 
 /// Parses the tokens of a single line.
 struct LineParser<'t, 'a> {
+    /// The line number, starting at 1.
+    line: usize,
     /// The tokens of the line, without the trailing newline.
     tokens: &'t [Token<'a>],
     /// The index of the next token.
@@ -90,10 +94,13 @@ impl<'t, 'a> LineParser<'t, 'a> {
     fn end_position(&self) -> Position {
         match self.tokens.last() {
             Some(token) => Position {
-                line: token.position.line,
+                line: self.line,
                 column: token.position.column + token.text.chars().count(),
             },
-            None => Position { line: 1, column: 1 },
+            None => Position {
+                line: self.line,
+                column: 1,
+            },
         }
     }
 
