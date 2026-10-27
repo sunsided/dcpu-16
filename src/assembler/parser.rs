@@ -37,8 +37,11 @@ pub(super) fn parse(source: &str) -> Result<Vec<MetaInstruction>, AssembleError>
             meta_instructions.push(MetaInstruction::Label(name.to_string()));
         }
 
+        let position = parser.peek().map(|token| token.position);
         if let Some(instruction) = parser.instruction()? {
-            meta_instructions.push(MetaInstruction::Instruction(instruction));
+            // An instruction always starts with its mnemonic token.
+            let position = position.expect("instruction without tokens");
+            meta_instructions.push(MetaInstruction::Instruction(instruction, position));
         }
 
         parser.end_of_line()?;

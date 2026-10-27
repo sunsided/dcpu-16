@@ -8,7 +8,8 @@ original website (as is the entire website) but still can be obtained from the [
 
 An implementation of a DCPU-16 assembler is also provided in this repo and is built by default through 
 the crate's `assembler` feature. It has no dependencies and reports syntax errors, undefined or duplicate
-labels and out-of-range literals as an `AssembleError` with the line and column of the problem.
+labels, out-of-range literals and programs longer than the emulator accepts as an `AssembleError` with the line
+and column of the problem.
 
 ---
 
@@ -247,8 +248,27 @@ TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter),
 TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
 ```
 
+## Fuzzing
+
+The assembler has two [cargo-fuzz] targets in [fuzz/](fuzz/):
+
+- `assemble` feeds arbitrary text to the assembler. It must never panic, and every error must point at a line that exists in the source.
+- `assemble_valid` generates programs that follow the grammar, with labels, comments, spacing and CRLF variations. They must always assemble, each instruction to one to three words.
+
+Fuzzing needs a nightly toolchain and `cargo install cargo-fuzz`. Then:
+
+```console
+task fuzz                                   # fuzz `assemble` until stopped
+task fuzz TARGET=assemble_valid             # fuzz the other target
+task fuzz -- -max_total_time=300            # pass libFuzzer flags after --
+task fuzz:smoke SECONDS=60                  # fuzz every target briefly
+```
+
+Crashing inputs end up in `fuzz/artifacts/<target>/`. Pull requests that touch the assembler run `task fuzz:smoke` in CI for 60 seconds per target and upload any crashing inputs as a build artifact.
+
 [0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c
 [DCPU-16 Specification]: docs/specification.txt
 [Wayback Machine]: http://web.archive.org/web/20120504005858/http://0x10c.com/doc/dcpu-16.txt
 [examples/sample.rs]: examples/sample.rs
 [examples/assemble.rs]: examples/assemble.rs
+[cargo-fuzz]: https://github.com/rust-fuzz/cargo-fuzz

@@ -11,7 +11,7 @@ mod parser;
 
 pub use self::error::{AssembleError, AssembleErrorKind, Position};
 use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
-use crate::Word;
+use crate::{Word, MAX_PROGRAM_WORDS};
 use std::collections::HashMap;
 use tracing::trace;
 
@@ -20,7 +20,8 @@ use tracing::trace;
 /// # Errors
 ///
 /// Returns an [`AssembleError`] pointing at the offending source position
-/// if the source cannot be parsed or refers to undefined labels.
+/// if the source cannot be parsed, refers to undefined labels, or assembles
+/// to a program longer than [`DCPU16::new`](crate::DCPU16::new) accepts.
 pub fn assemble<T>(source: T) -> Result<Vec<Word>, AssembleError>
 where
     T: AsRef<str>,
@@ -36,37 +37,41 @@ where
     }
 
     let mut instructions = Vec::new();
-    let mut current_position: Word = 0x0000;
+    let mut positions = Vec::new();
+    let mut current_position: usize = 0;
 
     // First pass, materialize as many instructions as possible.
     for token in tokens {
         match token {
-            MetaInstruction::Instruction(instruction) => {
+            MetaInstruction::Instruction(instruction, position) => {
                 let materialized = instruction.materialize(&label_map);
 
                 // We assume the best-case situation here.
                 // This is helpful because small values can be inlined
                 // into the instruction.
-                let len = materialized.len_estimate();
-                current_position += len as Word;
+                current_position += materialized.len_estimate();
 
                 instructions.push(materialized);
+                positions.push(position);
             }
             MetaInstruction::Label(label) => {
-                label_map.insert(label.clone(), current_position);
+                // A program that no longer fits is rejected right after this pass,
+                // so a truncated label address is never used for output.
+                label_map.insert(label.clone(), current_position as Word);
             }
         }
     }
+    check_program_length(&instructions, &positions)?;
 
     // Second pass, attempt to materialize the "flexible" instructions.
-    let mut current_position: Word;
+    let mut current_position: usize;
     loop {
         let mut replace_list = Vec::new();
-        current_position = 0x0000;
+        current_position = 0;
 
         for (i, entry) in instructions.iter().enumerate() {
             let current_length = entry.len_estimate();
-            current_position += current_length as Word;
+            current_position += current_length;
 
             match entry {
                 MaterializedInstruction::Static { .. } => continue,
@@ -85,7 +90,7 @@ where
 
                         // Update the labels.
                         for label_pos in label_map.values_mut() {
-                            if *label_pos > current_position {
+                            if usize::from(*label_pos) > current_position {
                                 *label_pos = (*label_pos as i64 + difference) as Word;
                             }
                         }
@@ -99,19 +104,42 @@ where
             break;
         }
 
-        // Update the improved instructions.
+        // Update the improved instructions. They only ever grow, so the program
+        // may have outgrown the limit.
         for (idx, instruction) in replace_list {
             instructions[idx] = instruction;
         }
+        check_program_length(&instructions, &positions)?;
     }
 
     // Go through the instructions one last time and generate the byte stream.
-    let mut bytesteam = Vec::with_capacity(current_position as usize);
+    let mut bytesteam = Vec::with_capacity(current_position);
     for entry in instructions {
         write_materialized_instruction_into_bytestream(&mut bytesteam, entry, &mut label_map)
     }
 
     Ok(bytesteam)
+}
+
+/// Ensures the program fits into [`MAX_PROGRAM_WORDS`], otherwise reports the
+/// source position of the first instruction that crosses the limit.
+fn check_program_length(
+    instructions: &[MaterializedInstruction],
+    positions: &[Position],
+) -> Result<(), AssembleError> {
+    let mut end = 0;
+    for (instruction, position) in instructions.iter().zip(positions) {
+        end += instruction.len_estimate();
+        if end > MAX_PROGRAM_WORDS {
+            return Err(AssembleError::new(
+                AssembleErrorKind::ProgramTooLarge {
+                    max_words: MAX_PROGRAM_WORDS,
+                },
+                *position,
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Writes a materialized instruction into the bytestream.
@@ -179,8 +207,8 @@ fn write_instruction_word_into_bytestream(
 /// jump label definitions in the original token stream.
 #[derive(Debug, Clone)]
 enum MetaInstruction {
-    /// An instruction.
-    Instruction(Instruction),
+    /// An instruction and the position of its mnemonic.
+    Instruction(Instruction, Position),
     /// A label.
     Label(String),
 }

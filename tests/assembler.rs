@@ -1,7 +1,7 @@
 //! Expected outputs were captured from the previous pest-based assembler.
 #![cfg(feature = "assembler")]
 
-use dcpu16::{assemble, AssembleErrorKind, Position};
+use dcpu16::{assemble, AssembleErrorKind, Position, DCPU16};
 
 fn error(source: &str) -> (AssembleErrorKind, Position) {
     let error = assemble(source).unwrap_err();
@@ -162,6 +162,50 @@ fn labels_may_start_with_register_names() {
     assert_eq!(
         assemble(":Crash SET PC, Crash").unwrap(),
         assemble(":crash SET PC, crash").unwrap()
+    );
+}
+
+/// 21844 three-word instructions: 65532 words.
+fn three_word_instructions() -> String {
+    "SET [0x1000], 0x1234\n".repeat(21844)
+}
+
+#[test]
+fn accepts_program_of_maximum_length() {
+    let source = three_word_instructions() + "SET A, 1\nSET A, 1\n";
+    let program = assemble(source).unwrap();
+    assert_eq!(program.len(), 65534);
+
+    // The emulator must accept everything the assembler produces.
+    DCPU16::new(&program);
+}
+
+#[test]
+fn reports_program_exceeding_maximum_length() {
+    let source = three_word_instructions() + "SET A, 1\nSET A, 1\nSET A, 1\n";
+    assert_eq!(
+        error(&source),
+        (
+            AssembleErrorKind::ProgramTooLarge { max_words: 65534 },
+            at(21847, 1)
+        )
+    );
+}
+
+#[test]
+fn reports_program_outgrowing_maximum_length_through_label_references() {
+    // Fits while both jumps are estimated as one word, but `end` ends up beyond
+    // the inline literal range, so the first jump grows to two words.
+    let source = format!(
+        ":start SET PC, end\n{}:end SET PC, start\n",
+        three_word_instructions()
+    );
+    assert_eq!(
+        error(&source),
+        (
+            AssembleErrorKind::ProgramTooLarge { max_words: 65534 },
+            at(21846, 6)
+        )
     );
 }
 
