@@ -52,6 +52,23 @@ pub enum SpecialRegister {
     Overflow,
 }
 
+/// Where an operand reads and writes its value.
+///
+/// Resolving an [`InstructionArgument`] into a location applies its side
+/// effects exactly once: `PUSH` and `POP` move the stack pointer while being
+/// resolved, and reading or writing the location afterwards does not.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Location {
+    /// A general-purpose register.
+    Register(Register),
+    /// A RAM address.
+    Ram(Word),
+    /// A special register.
+    SpecialRegister(SpecialRegister),
+    /// A literal value; writing to it fails silently.
+    Literal(Word),
+}
+
 impl InstructionArgument {
     /// Builds an argument from its encoded definition and, if the definition
     /// requires one, the extra operand word that followed the instruction.

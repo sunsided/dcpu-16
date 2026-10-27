@@ -30,3 +30,10 @@ path = "fuzz_targets/assemble_valid.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "execute"
+path = "fuzz_targets/execute.rs"
+test = false
+doc = false
+bench = false

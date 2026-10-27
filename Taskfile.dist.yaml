@@ -116,7 +116,7 @@ tasks:
       - cargo run --example sample
 
   fuzz:
-    desc: Fuzz the assembler until stopped (TARGET=assemble|assemble_valid, libFuzzer flags after --)
+    desc: Fuzz one target until stopped (TARGET=assemble|assemble_valid|execute, libFuzzer flags after --)
     cmds:
       - task: fuzz:run
         vars:

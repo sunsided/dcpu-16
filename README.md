@@ -95,57 +95,57 @@ When executing the bytecode instructions, the program output looks like this:
 
 ```
  INFO dcpu16: Loaded 32 words of program data
-DEBUG dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0000 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0000: 7c01 0030 ; SET A, 0x30 ("A <- 0x30")
-DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0002 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0002: 7de1 1000 0020 ; SET [0x1000], 0x20 ("RAM[0x1000] <- 0x20")
-DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0030 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0005 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0005: 7803 1000 ; SUB A, [0x1000] ("A <- A - RAM[0x1000]")
-DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0007 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0007: c00d ; IFN A, 0x10 ("execute next instruction if A != 0x10")
-DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0008 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0008 SP=0000 O=0000
 DEBUG dcpu16: SKIP 0008: 7dc1 001a ; SET PC, 0x1A ("PC <- 0x1A")
-DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000A SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=000A SP=0000 O=0000
 DEBUG dcpu16: EXEC 000A: a861 ; SET I, 0x0A ("I <- 0x0A")
-DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000B SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=0010 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000B SP=0000 O=0000
 DEBUG dcpu16: EXEC 000B: 7c01 2000 ; SET A, 0x2000 ("A <- 0x2000")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000D SP=0000 O=0000
 DEBUG dcpu16: EXEC 000D: 2161 2000 ; SET [0x2000+I], [A] ("RAM[0x2000 + I] <- RAM[A]")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=000A J=0000 PC⁎=000F SP=0000 O=0000
 DEBUG dcpu16: EXEC 000F: 8463 ; SUB I, 0x01 ("I <- I - 0x01")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0010 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0010: 806d ; IFN I, 0x00 ("execute next instruction if I != 0x00")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=0011 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0011: 7dc1 000d ; SET PC, 0x0D ("PC <- 0x0D")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000D SP=0000 O=0000
 DEBUG dcpu16: EXEC 000D: 2161 2000 ; SET [0x2000+I], [A] ("RAM[0x2000 + I] <- RAM[A]")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0009 J=0000 PC⁎=000F SP=0000 O=0000
 DEBUG dcpu16: EXEC 000F: 8463 ; SUB I, 0x01 ("I <- I - 0x01")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0010 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0010: 806d ; IFN I, 0x00 ("execute next instruction if I != 0x00")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=0011 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0011: 7dc1 000d ; SET PC, 0x0D ("PC <- 0x0D")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000D SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0008 J=0000 PC⁎=000D SP=0000 O=0000
 ... loop repeats ...
 DEBUG dcpu16: EXEC 000D: 2161 2000 ; SET [0x2000+I], [A] ("RAM[0x2000 + I] <- RAM[A]")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000F SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0001 J=0000 PC⁎=000F SP=0000 O=0000
 DEBUG dcpu16: EXEC 000F: 8463 ; SUB I, 0x01 ("I <- I - 0x01")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0010 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0010 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0010: 806d ; IFN I, 0x00 ("execute next instruction if I != 0x00")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0011 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0011 SP=0000 O=0000
 DEBUG dcpu16: SKIP 0011: 7dc1 000d ; SET PC, 0x0D ("PC <- 0x0D")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0013 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0000 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0013 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0013: 9031 ; SET X, 0x04 ("X <- 0x04")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0014 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0014 SP=0000 O=0000
 TRACE dcpu16::instruction: Decoding non-basic instruction 7C10, opcode 01, value 1F
 DEBUG dcpu16: EXEC 0014: 7c10 0018 ; JSR 0x18 ("jump to subroutine at 0x18")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0018 SP=FFFE O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0004 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0018 SP=FFFF O=0000
 DEBUG dcpu16: EXEC 0018: 9037 ; SHL X, 0x04 ("X <- X << 0x04")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0019 SP=FFFE O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0019 SP=FFFF O=0000
 DEBUG dcpu16: EXEC 0019: 61c1 ; SET PC, POP ("PC <- pop value from stack")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0016 SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=0016 SP=0000 O=0000
 DEBUG dcpu16: EXEC 0016: 7dc1 001a ; SET PC, 0x1A ("PC <- 0x1A")
-DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=FFFF O=0000
+DEBUG dcpu16: Registers: A=2000 B=0000 C=0000 X=0040 Y=0000 Z=0000 I=0000 J=0000 PC⁎=001A SP=0000 O=0000
 DEBUG dcpu16: EXEC 001A: 7dc1 001a ; SET PC, 0x1A ("PC <- 0x1A")
  WARN dcpu16: Crash loop detected at PC=001A - terminating
 ```
@@ -250,21 +250,22 @@ TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter),
 
 ## Fuzzing
 
-The assembler has two [cargo-fuzz] targets in [fuzz/](fuzz/):
+There are three [cargo-fuzz] targets in [fuzz/](fuzz/):
 
 - `assemble` feeds arbitrary text to the assembler. It must never panic, and every error must point at a line that exists in the source.
 - `assemble_valid` generates programs that follow the grammar, with labels, comments, spacing and CRLF variations. They must always assemble, each instruction to one to three words.
+- `execute` runs arbitrary words as a program for up to 10,000 instructions. The emulator must never panic.
 
 Fuzzing needs a nightly toolchain and `cargo install cargo-fuzz`. Then:
 
 ```console
 task fuzz                                   # fuzz `assemble` until stopped
-task fuzz TARGET=assemble_valid             # fuzz the other target
+task fuzz TARGET=execute                    # fuzz another target
 task fuzz -- -max_total_time=300            # pass libFuzzer flags after --
 task fuzz:smoke SECONDS=60                  # fuzz every target briefly
 ```
 
-Crashing inputs end up in `fuzz/artifacts/<target>/`. Pull requests that touch the assembler run `task fuzz:smoke` in CI for 60 seconds per target and upload any crashing inputs as a build artifact.
+Crashing inputs end up in `fuzz/artifacts/<target>/`. Pull requests that touch the code run `task fuzz:smoke` in CI for 60 seconds per target and upload any crashing inputs as a build artifact.
 
 [0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c
 [DCPU-16 Specification]: docs/specification.txt
