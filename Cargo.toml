@@ -23,9 +23,9 @@ default = [ "assembler" ]
 assembler = [ "pest", "pest_derive" ]
 
 [dependencies]
-tracing = "0.1.26"
-pest = { version = "2.1.3", optional = true }
-pest_derive = { version = "2.1.0", optional = true }
+tracing = "0.1.44"
+pest = { version = "2.9.5", optional = true }
+pest_derive = { version = "2.9.5", optional = true }
 
 [dev-dependencies]
-tracing-subscriber = "0.2.18"
+tracing-subscriber = "0.3.23"
