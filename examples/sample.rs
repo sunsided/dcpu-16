@@ -1,3 +1,5 @@
+//! Runs the example program from the DCPU-16 specification from hand-encoded bytecode.
+
 use dcpu16::{Register, DCPU16};
 
 fn main() {

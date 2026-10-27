@@ -1,3 +1,5 @@
+//! Assembles the example program from the DCPU-16 specification and runs it.
+
 use dcpu16::{assemble, Register, DCPU16};
 
 fn main() {
@@ -48,7 +50,13 @@ fn main() {
         :crash        SET PC, crash            ; 7dc1 001a
     ";
 
-    let program = assemble(source);
+    let program = match assemble(source) {
+        Ok(program) => program,
+        Err(error) => {
+            eprintln!("error: {error}");
+            std::process::exit(1);
+        }
+    };
 
     let mut cpu = DCPU16::new(program.as_slice());
     println!("{}", cpu.hexdump_program(8));

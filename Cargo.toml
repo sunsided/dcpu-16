@@ -20,12 +20,10 @@ path = "examples/assemble.rs"
 
 [features]
 default = [ "assembler" ]
-assembler = [ "pest", "pest_derive" ]
+assembler = []
 
 [dependencies]
 tracing = "0.1.44"
-pest = { version = "2.9.5", optional = true }
-pest_derive = { version = "2.9.5", optional = true }
 
 [dev-dependencies]
 tracing-subscriber = "0.3.23"
