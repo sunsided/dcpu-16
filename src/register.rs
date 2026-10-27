@@ -1,15 +1,25 @@
+//! The eight general-purpose CPU registers.
+
 use crate::Word;
 
 /// Identifier for a CPU register.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Register {
+    /// Register `A`.
     A = 0,
+    /// Register `B`.
     B = 1,
+    /// Register `C`.
     C = 2,
+    /// Register `X`.
     X = 3,
+    /// Register `Y`.
     Y = 4,
+    /// Register `Z`.
     Z = 5,
+    /// Register `I`.
     I = 6,
+    /// Register `J`.
     J = 7,
 }
 

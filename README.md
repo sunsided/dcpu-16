@@ -7,7 +7,8 @@ The [DCPU-16 Specification](docs/specification.txt) is no longer available on th
 original website (as is the entire website) but still can be obtained from the [Wayback Machine].
 
 An implementation of a DCPU-16 assembler is also provided in this repo and is built by default through 
-the crate's `assembler` feature.
+the crate's `assembler` feature. It has no dependencies and reports syntax errors, undefined or duplicate
+labels and out-of-range literals as an `AssembleError` with the line and column of the problem.
 
 ---
 
@@ -194,7 +195,13 @@ fn main() {
         :crash        SET PC, crash            ; d9c1*
     ";
 
-    let program = assemble(&source);
+    let program = match assemble(source) {
+        Ok(program) => program,
+        Err(error) => {
+            eprintln!("error: {error}");
+            std::process::exit(1);
+        }
+    };
 
     let mut cpu = DCPU16::new(program.as_slice());
     println!("{}", cpu.hexdump_program(8));
@@ -221,23 +228,23 @@ in the original code but represented using `d9c1` in this output:
 This is the tracing output of the assembler:
 
 ```
-TRACE dcpu16::assembler: instruction Basic(SET, Register(A), Static(Literal(48))), len = 2
-TRACE dcpu16::assembler: instruction Basic(SET, Address(4096), Static(Literal(32))), len = 3
-TRACE dcpu16::assembler: instruction Basic(SUB, Register(A), Static(Address(4096))), len = 2
-TRACE dcpu16::assembler: instruction Basic(IFN, Register(A), Static(Literal(16))), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, Register(I), Static(Literal(10))), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, Register(A), Static(Literal(8192))), len = 2
-TRACE dcpu16::assembler: instruction Basic(SET, AddressOffset { address: 8192, register: I }, Static(AddressFromRegister(A))), len = 2
-TRACE dcpu16::assembler: instruction Basic(SUB, Register(I), Static(Literal(1))), len = 1
-TRACE dcpu16::assembler: instruction Basic(IFN, Register(I), Static(Literal(0))), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("loop")), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, Register(X), Static(Literal(4))), len = 1
-TRACE dcpu16::assembler: instruction NonBasic(JSR, LabelReference("testsub")), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
-TRACE dcpu16::assembler: instruction Basic(SHL, Register(X), Static(Literal(4))), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), Static(StackOperation(Pop))), len = 1
-TRACE dcpu16::assembler: instruction Basic(SET, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, Register(A), Static(Literal(48))), len = 2
+TRACE dcpu16::assembler: instruction Basic(Set, Address(4096), Static(Literal(32))), len = 3
+TRACE dcpu16::assembler: instruction Basic(Sub, Register(A), Static(Address(4096))), len = 2
+TRACE dcpu16::assembler: instruction Basic(Ifn, Register(A), Static(Literal(16))), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, Register(I), Static(Literal(10))), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, Register(A), Static(Literal(8192))), len = 2
+TRACE dcpu16::assembler: instruction Basic(Set, AddressOffset { address: 8192, register: I }, Static(AddressFromRegister(A))), len = 2
+TRACE dcpu16::assembler: instruction Basic(Sub, Register(I), Static(Literal(1))), len = 1
+TRACE dcpu16::assembler: instruction Basic(Ifn, Register(I), Static(Literal(0))), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("loop")), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, Register(X), Static(Literal(4))), len = 1
+TRACE dcpu16::assembler: instruction NonBasic(Jsr, LabelReference("testsub")), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+TRACE dcpu16::assembler: instruction Basic(Shl, Register(X), Static(Literal(4))), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), Static(StackOperation(Pop))), len = 1
+TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
 ```
 
 [0x10<sup>c</sup>]: https://en.wikipedia.org/wiki/0x10c

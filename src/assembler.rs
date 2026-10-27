@@ -1,28 +1,37 @@
+//! The DCPU-16 assembler.
+//!
+//! Source is parsed into [`MetaInstruction`]s by [`parser`], then laid out in
+//! two passes: label addresses are estimated optimistically and refined until
+//! no instruction changes size, so references to nearby labels can use the
+//! short inline literal encoding.
+
+mod error;
+mod lexer;
+mod parser;
+
+pub use self::error::{AssembleError, AssembleErrorKind, Position};
 use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
-use crate::{Register, Word};
-use pest::iterators::Pair;
-use pest::Parser;
-use pest_derive::Parser;
+use crate::Word;
 use std::collections::HashMap;
 use tracing::trace;
 
-#[derive(Parser)]
-#[grammar = "assemble.pest"]
-struct AssembleParser;
-
 /// Assembles the source code into an DCPU-16 program bytecode.
-pub fn assemble<T>(source: T) -> Vec<Word>
+///
+/// # Errors
+///
+/// Returns an [`AssembleError`] pointing at the offending source position
+/// if the source cannot be parsed or refers to undefined labels.
+pub fn assemble<T>(source: T) -> Result<Vec<Word>, AssembleError>
 where
     T: AsRef<str>,
 {
-    let tokens = get_meta_instructions(source);
+    let tokens = parser::parse(source.as_ref())?;
 
+    // Labels are unique and every reference is defined; the parser ensures both.
     let mut label_map = HashMap::new();
     for token in tokens.iter() {
         if let MetaInstruction::Label(label) = token {
-            if label_map.insert(label.clone(), 0x0000u16).is_some() {
-                panic!("Label '{}' defined multiple times", label);
-            }
+            label_map.insert(label.clone(), 0x0000u16);
         }
     }
 
@@ -102,7 +111,7 @@ where
         write_materialized_instruction_into_bytestream(&mut bytesteam, entry, &mut label_map)
     }
 
-    bytesteam
+    Ok(bytesteam)
 }
 
 /// Writes a materialized instruction into the bytestream.
@@ -166,64 +175,6 @@ fn write_instruction_word_into_bytestream(
     }
 }
 
-/// Parses the source and generates a stream of [`MetaInstruction`] instances.
-fn get_meta_instructions<T>(source: T) -> Vec<MetaInstruction>
-where
-    T: AsRef<str>,
-{
-    // Get the top-level program rule.
-    let mut program =
-        AssembleParser::parse(Rule::program, source.as_ref()).expect("unsuccessful parse");
-    let program = program.next().unwrap();
-
-    let mut meta_instructions = Vec::new();
-    for record in program.into_inner() {
-        let token = match record.as_rule() {
-            Rule::label => {
-                let inner = record.into_inner();
-                MetaInstruction::Label(String::from(inner.as_str()))
-            }
-            Rule::basic_instruction => {
-                let mut instruction = record.into_inner();
-
-                let op = instruction.next().unwrap();
-                let a = instruction.next().unwrap();
-                let b = instruction.next().unwrap();
-
-                let operation = parse_basic_operation(op);
-                let value_a = parse_instruction_argument(a);
-                let value_b = parse_value(b);
-
-                let instruction = Instruction::Basic(operation, value_a, value_b);
-                MetaInstruction::Instruction(instruction)
-            }
-            Rule::nonbasic_instruction => {
-                let mut instruction = record.into_inner();
-
-                let op = instruction.next().unwrap();
-                let a = instruction.next().unwrap();
-                assert!(instruction.next().is_none());
-
-                let operation = parse_nonbasic_operation(op);
-                let value_a = parse_value(a);
-
-                let instruction = Instruction::NonBasic(operation, value_a);
-                MetaInstruction::Instruction(instruction)
-            }
-            Rule::EOI => {
-                break;
-            }
-            _ => {
-                println!("record = {:?}", record);
-                unreachable!()
-            }
-        };
-
-        meta_instructions.push(token);
-    }
-    meta_instructions
-}
-
 /// A [`MetaInstruction`] captures the both instruction and
 /// jump label definitions in the original token stream.
 #[derive(Debug, Clone)]
@@ -256,25 +207,42 @@ enum Value {
 /// A basic operation with two arguments.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum BasicOperationName {
+    /// `SET`: Sets `a` to `b`.
     Set,
+    /// `ADD`: Sets `a` to `a+b`.
     Add,
+    /// `SUB`: Sets `a` to `a-b`.
     Sub,
+    /// `MUL`: Sets `a` to `a*b`.
     Mul,
+    /// `DIV`: Sets `a` to `a/b`.
     Div,
+    /// `MOD`: Sets `a` to `a%b`.
     Mod,
+    /// `SHL`: Sets `a` to `a<<b`.
     Shl,
+    /// `SHR`: Sets `a` to `a>>b`.
     Shr,
+    /// `AND`: Sets `a` to `a&b`.
     And,
+    /// `BOR`: Sets `a` to `a|b`.
     Bor,
+    /// `XOR`: Sets `a` to `a^b`.
     Xor,
+    /// `IFE`: Performs the next instruction only if `a==b`.
     Ife,
+    /// `IFN`: Performs the next instruction only if `a!=b`.
     Ifn,
+    /// `IFG`: Performs the next instruction only if `a>b`.
     Ifg,
+    /// `IFB`: Performs the next instruction only if `(a&b)!=0`.
     Ifb,
 }
 
+/// A non-basic operation with one argument.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum NonBasicOperationName {
+    /// `JSR`: Pushes the address of the next instruction and jumps to `a`.
     Jsr,
 }
 
@@ -417,18 +385,26 @@ impl InstructionArgument {
 enum MaterializedInstruction {
     /// An instruction that is fixed in size.
     Static {
+        /// The instruction this was materialized from.
         instruction: Instruction,
+        /// The encoded instruction word.
         instruction_word: Word,
+        /// The first extra operand word, if any.
         arg1: Option<Word>,
+        /// The second extra operand word, if any.
         arg2: Option<Word>,
     },
     /// An instruction that is flexible in size, e.g. because
     /// it corresponds to a jump label that could be represented as
     /// an inline literal.
     Flexible {
+        /// The instruction this was materialized from.
         instruction: Instruction,
+        /// The encoded instruction word.
         instruction_word: Word,
+        /// The first extra operand word, if any.
         arg1: Option<Word>,
+        /// The second extra operand word, if any.
         arg2: Option<Word>,
     },
 }
@@ -534,161 +510,4 @@ impl Instruction {
             }
         }
     }
-}
-
-fn parse_basic_operation(pair: Pair<Rule>) -> BasicOperationName {
-    match pair.as_str() {
-        "SET" => BasicOperationName::Set,
-        "ADD" => BasicOperationName::Add,
-        "SUB" => BasicOperationName::Sub,
-        "MUL" => BasicOperationName::Mul,
-        "DIV" => BasicOperationName::Div,
-        "MOD" => BasicOperationName::Mod,
-        "SHL" => BasicOperationName::Shl,
-        "SHR" => BasicOperationName::Shr,
-        "AND" => BasicOperationName::And,
-        "BOR" => BasicOperationName::Bor,
-        "XOR" => BasicOperationName::Xor,
-        "IFE" => BasicOperationName::Ife,
-        "IFN" => BasicOperationName::Ifn,
-        "IFG" => BasicOperationName::Ifg,
-        "IFB" => BasicOperationName::Ifb,
-        _ => unimplemented!(),
-    }
-}
-
-fn parse_nonbasic_operation(pair: Pair<Rule>) -> NonBasicOperationName {
-    match pair.as_str() {
-        "JSR" => NonBasicOperationName::Jsr,
-        _ => unimplemented!(),
-    }
-}
-
-fn parse_instruction_argument(pair: Pair<Rule>) -> InstructionArgument {
-    match parse_value(pair) {
-        Value::Static(instruction_argument) => instruction_argument,
-        _ => unreachable!(),
-    }
-}
-
-fn parse_value(pair: Pair<Rule>) -> Value {
-    match pair.as_rule() {
-        Rule::literal => parse_literal(pair),
-        Rule::register => parse_register(pair),
-        Rule::address => parse_address(pair),
-        Rule::address_with_offset => parse_address_with_offset(pair),
-        Rule::special_register => parse_special_register(pair),
-        Rule::stack_op => parse_stack_op(pair),
-        Rule::label_ref => parse_label_ref(pair),
-        _ => {
-            println!("{:?}", pair);
-            unreachable!()
-        }
-    }
-}
-
-fn parse_register(pair: Pair<Rule>) -> Value {
-    Value::Static(InstructionArgument::Register(parse_register_raw(pair)))
-}
-
-fn parse_register_raw(pair: Pair<Rule>) -> Register {
-    match pair.as_str() {
-        "A" => Register::A,
-        "B" => Register::B,
-        "C" => Register::C,
-        "X" => Register::X,
-        "Y" => Register::Y,
-        "Z" => Register::Z,
-        "I" => Register::I,
-        "J" => Register::J,
-        _ => unreachable!(),
-    }
-}
-
-fn parse_literal(pair: Pair<Rule>) -> Value {
-    let item = pair.into_inner().next().unwrap();
-    let word = parse_literal_raw(item);
-    Value::Static(InstructionArgument::Literal(word))
-}
-
-fn parse_literal_raw(pair: Pair<Rule>) -> Word {
-    match pair.as_rule() {
-        Rule::value_dec => pair
-            .as_str()
-            .parse()
-            .expect("invalid format for decimal literal"),
-        Rule::value_hex => u16::from_str_radix(pair.as_str().trim_start_matches("0x"), 16)
-            .expect("invalid format for hex literal"),
-        _ => unreachable!(),
-    }
-}
-
-fn parse_address(pair: Pair<Rule>) -> Value {
-    let mut address = pair.into_inner();
-
-    // Skip opening bracket.
-    address.next();
-
-    let literal = address.next().unwrap();
-    match literal.as_rule() {
-        Rule::literal => {
-            let item = literal.into_inner().next().unwrap();
-            let word = parse_literal_raw(item);
-            Value::Static(InstructionArgument::Address(word))
-        }
-        Rule::register => {
-            let register = parse_register_raw(literal);
-            Value::Static(InstructionArgument::AddressFromRegister(register))
-        }
-        _ => unreachable!(),
-    }
-}
-
-fn parse_address_with_offset(pair: Pair<Rule>) -> Value {
-    let mut address = pair.into_inner();
-
-    // Skip opening bracket.
-    address.next();
-
-    let literal = address.next().unwrap().into_inner().next().unwrap();
-    let register = address.next().unwrap();
-
-    let base = parse_literal_raw(literal);
-    let offset = parse_register_raw(register);
-
-    let arg = InstructionArgument::AddressOffset {
-        address: base,
-        register: offset,
-    };
-    Value::Static(arg)
-}
-
-fn parse_special_register(pair: Pair<Rule>) -> Value {
-    let special = match pair.as_str() {
-        "SP" => SpecialRegister::StackPointer,
-        "PC" => SpecialRegister::ProgramCounter,
-        "O" => SpecialRegister::Overflow,
-        _ => {
-            println!("{:?}", pair);
-            unreachable!()
-        }
-    };
-    Value::Static(InstructionArgument::SpecialRegister(special))
-}
-
-fn parse_stack_op(pair: Pair<Rule>) -> Value {
-    let op = match pair.as_str() {
-        "POP" => StackOperation::Pop,
-        "PEEK" => StackOperation::Peek,
-        "PUSH" => StackOperation::Push,
-        _ => {
-            println!("{:?}", pair);
-            unreachable!()
-        }
-    };
-    Value::Static(InstructionArgument::StackOperation(op))
-}
-
-fn parse_label_ref(pair: Pair<Rule>) -> Value {
-    Value::LabelReference(String::from(pair.as_str()))
 }

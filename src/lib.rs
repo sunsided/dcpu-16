@@ -1,3 +1,12 @@
+//! An emulator for the DCPU-16 16-bit processor from the 0x10c game,
+//! with an optional assembler behind the `assembler` feature.
+//!
+//! Load a program with [`DCPU16::new`] and execute it with [`DCPU16::run`]
+//! or [`DCPU16::step`]. With the `assembler` feature, `assemble` turns
+//! DCPU-16 assembly source into program words.
+
+#![warn(missing_docs, clippy::missing_docs_in_private_items)]
+
 #[cfg(feature = "assembler")]
 mod assembler;
 mod disassemble;
@@ -7,7 +16,7 @@ mod instruction_word;
 mod register;
 
 #[cfg(feature = "assembler")]
-pub use crate::assembler::assemble;
+pub use crate::assembler::{assemble, AssembleError, AssembleErrorKind, Position};
 use crate::instruction::{Instruction, InstructionWithOperands};
 use crate::instruction_argument::{
     InstructionArgument, InstructionArgumentDefinition, SpecialRegister, StackOperation,
@@ -17,12 +26,15 @@ pub use crate::register::Register;
 use std::ops::{BitAnd, BitOr, BitXor};
 use tracing::{debug, info, trace, warn};
 
+/// The DCPU-16 is a 16-bit machine; every register, RAM cell and program entry is one word.
 type Word = u16;
 
+/// Number of general-purpose registers (`A`, `B`, `C`, `X`, `Y`, `Z`, `I`, `J`).
 const NUM_REGISTERS: usize = 8;
+/// Number of words of RAM.
 const NUM_RAM_WORDS: usize = 0x10000;
 
-// Stack pointer is initialized to 0xffff (for 0x10000 words of memory).
+/// Initial stack pointer: the last RAM word, `0xffff`; the stack grows downwards.
 const STACK_POINTER_INIT: usize = NUM_RAM_WORDS - 1;
 
 /// Decoding of instructions or values.
@@ -55,6 +67,11 @@ pub struct DCPU16<'p> {
 }
 
 impl<'p> DCPU16<'p> {
+    /// Creates a CPU with cleared registers and RAM that executes `program` from address `0`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the program does not fit into the 16-bit address space.
     pub fn new(program: &'p [u16]) -> Self {
         assert!(program.len() < u16::MAX as usize);
         let cpu = Self {
@@ -288,6 +305,8 @@ impl<'p> DCPU16<'p> {
         true
     }
 
+    /// Reads the instruction at the program counter, including its extra operand words,
+    /// advances the program counter past it and resolves its operands.
     fn read_instruction(&mut self) -> InstructionWithOperands {
         let raw_instruction = self.read_word_and_advance_pc();
         let instruction_word = InstructionWord::decode(raw_instruction);
@@ -322,7 +341,7 @@ impl<'p> DCPU16<'p> {
         value
     }
 
-    /// Shorthand for [`interpret_argument()`] followed by [`read_value()`].
+    /// Shorthand for [`InstructionArgument::from()`] followed by [`Self::read_value()`].
     /// Returns the address and the value at the address.
     fn resolve_argument(
         &mut self,
@@ -416,6 +435,7 @@ impl<'p> DCPU16<'p> {
         }
     }
 
+    /// Logs all register values at debug level.
     fn dump_registers(&self) {
         debug!(
             "Registers: A={a:04X?} B={b:04X?} C={c:04X?} X={x:04X?} Y={y:04X?} Z={z:04X?} I={i:04X?} J={j:04X?} PC⁎={pc:04X?} SP={sp:04X?} O={o:04X?}",
@@ -433,6 +453,12 @@ impl<'p> DCPU16<'p> {
         );
     }
 
+    /// Formats the program as a hex dump with `words_per_row` words per line,
+    /// each line prefixed with its start address.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `words_per_row` is zero.
     pub fn hexdump_program(&self, words_per_row: usize) -> String {
         assert!(words_per_row > 0);
         let newline = String::from('\n');
@@ -477,6 +503,12 @@ impl<'p> DCPU16<'p> {
         dump
     }
 
+    /// Formats the entire RAM as a hex dump with `words_per_row` words per line,
+    /// each line prefixed with its start address.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `words_per_row` is zero.
     pub fn hexdump_ram(&self, words_per_row: usize) -> String {
         assert!(words_per_row > 0);
         debug_assert_eq!(NUM_RAM_WORDS, 65536);

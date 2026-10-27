@@ -1,3 +1,5 @@
+//! Decoded instructions together with their extra operand words.
+
 use crate::disassemble::Disassemble;
 use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition};
 use crate::instruction_word::InstructionWord;
@@ -80,9 +82,13 @@ impl ResolvedValue {
 
 /// An instruction and its resolved arguments.
 pub struct InstructionWithOperands {
+    /// The raw first word of the instruction.
     raw_instruction: Word,
+    /// The decoded instruction word.
     pub instruction: InstructionWord,
+    /// The resolved `a` operand.
     pub a: ResolvedValue,
+    /// The resolved `b` operand; `None` for non-basic instructions.
     pub b: Option<ResolvedValue>,
 }
 

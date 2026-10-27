@@ -1,8 +1,14 @@
+//! Decoding of the first word of an instruction into its opcode and operand definitions.
+
 use crate::instruction_argument::InstructionArgumentDefinition;
 use crate::{Decode, Word};
 use std::fmt::Debug;
 use tracing::trace;
 
+/// The decoded first word of an instruction.
+///
+/// Basic instructions have the format `bbbbbbaaaaaaoooo`: a four-bit opcode
+/// followed by two six-bit operand definitions.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InstructionWord {
     /// Non-basic instruction.
@@ -11,105 +17,135 @@ pub enum InstructionWord {
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
     Set {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a+b`, sets `O` to `0x0001` if there's an overflow, `0x0` otherwise.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
     Add {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a-b`, sets `O` to `0xffff` if there's an underflow, `0x0` otherwise.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
     Sub {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a*b`, sets `O` to `((a*b)>>16)&0xffff`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
     Mul {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a/b`, sets `O` to `((a<<16)/b)&0xffff`. if `b==0`, sets `a` and `O` to `0` instead.
     ///
     /// Takes 3 cycles, plus the cost of `a` and `b`.
     Div {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a%b`. if `b==0`, sets `a` to `0` instead.
     ///
     /// Takes 3 cycles, plus the cost of `a` and `b`.
     Mod {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a<<b`, sets `O` to `((a<<b)>>16)&0xffff`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
     Shl {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a>>b`, sets `O` to `((a<<16)>>b)&0xffff`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
     Shr {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a&b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
     And {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a|b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
     Bor {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Sets `a` to `a^b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
     Xor {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Performs next instruction only if `a==b`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
     Ife {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Performs next instruction only if `a!=b`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
     Ifn {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Performs next instruction only if `a>b`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
     Ifg {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
     /// Performs next instruction only if `(a&b)!=0`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
     Ifb {
+        /// The first operand, `a`.
         a: InstructionArgumentDefinition,
+        /// The second operand, `b`.
         b: InstructionArgumentDefinition,
     },
 }
@@ -123,7 +159,10 @@ pub enum NonBasicInstruction {
     Reserved,
     /// Pushes the address of the next instruction to the stack, then sets `PC` to `a`.
     /// Takes 2 cycles, plus the cost of `a`.
-    Jsr { a: InstructionArgumentDefinition },
+    Jsr {
+        /// The jump target.
+        a: InstructionArgumentDefinition,
+    },
 }
 
 impl Decode for InstructionWord {

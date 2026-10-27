@@ -1,3 +1,5 @@
+//! Instruction operands, both as encoded in the instruction word and as resolved values.
+
 use crate::{Decode, Register, Word};
 
 /// The argument of an instruction.
@@ -51,6 +53,12 @@ pub enum SpecialRegister {
 }
 
 impl InstructionArgument {
+    /// Builds an argument from its encoded definition and, if the definition
+    /// requires one, the extra operand word that followed the instruction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the definition requires an operand word but `operand` is `None`.
     pub fn from(value: InstructionArgumentDefinition, operand: Option<Word>) -> Self {
         match value {
             InstructionArgumentDefinition::Register { register } => {
@@ -112,14 +120,17 @@ impl InstructionArgument {
 pub enum InstructionArgumentDefinition {
     /// register (A, B, C, X, Y, Z, I or J, in that order)
     Register {
+        /// The register.
         register: Register,
     },
     /// \[register\]
     AtAddressFromRegister {
+        /// The register holding the address.
         register: Register,
     },
     /// \[next word + register\]
     AtAddressFromNextWordPlusRegister {
+        /// The register added to the base address.
         register: Register,
     },
     /// POP / \[SP++\]
@@ -128,8 +139,11 @@ pub enum InstructionArgumentDefinition {
     Peek,
     /// PUSH / \[--SP\]
     Push,
+    /// SP
     OfStackPointer,
+    /// PC
     OfProgramCounter,
+    /// O
     OfOverflow,
     /// \[next word\]
     AtAddressFromNextWord,
@@ -137,6 +151,7 @@ pub enum InstructionArgumentDefinition {
     NextWordLiteral,
     /// literal value 0x00-0x1f (literal)
     Literal {
+        /// The literal value, `0x00` to `0x1f`.
         value: Word,
     },
 }
