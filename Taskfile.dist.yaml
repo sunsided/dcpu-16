@@ -1,0 +1,119 @@
+# https://taskfile.dev
+version: '3'
+
+vars:
+  RUST_LOG: '{{ .RUST_LOG | default "dcpu16=trace" }}'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list --sort=none
+    silent: true
+
+  fmt:
+    desc: Format all Rust sources
+    aliases: [format]
+    preconditions: &cargo
+      - sh: command -v cargo
+        msg: "cargo not found — install Rust from https://rustup.rs/"
+    cmds:
+      - cargo fmt --all
+
+  fmt:check:
+    desc: Check formatting without modifying files
+    preconditions: *cargo
+    cmds:
+      - cargo fmt --all -- --check
+
+  lint:
+    desc: Run clippy on all targets and features (warnings as errors)
+    preconditions: *cargo
+    cmds:
+      - cargo clippy --all-targets --all-features -- -D warnings
+
+  lint:fix:
+    desc: Auto-fix clippy lints, then format
+    aliases: [fix]
+    preconditions: *cargo
+    cmds:
+      - cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
+      - task: fmt
+
+  check:
+    desc: Type-check with and without the assembler feature, then check formatting
+    preconditions: *cargo
+    cmds:
+      - cargo check --all-targets
+      - cargo check --lib --no-default-features
+      - task: fmt:check
+
+  build:
+    desc: Build library and examples (debug)
+    preconditions: *cargo
+    cmds:
+      - cargo build --all-targets
+
+  build:release:
+    desc: Build library and examples (release)
+    preconditions: *cargo
+    cmds:
+      - cargo build --all-targets --release
+
+  test:
+    desc: Run the test suite, including doctests (extra args after --)
+    preconditions: *cargo
+    cmds:
+      - cargo test --all-features {{.CLI_ARGS}}
+
+  test:no-default-features:
+    desc: Run tests without the optional assembler feature
+    preconditions: *cargo
+    cmds:
+      - cargo test --no-default-features --lib {{.CLI_ARGS}}
+
+  run:
+    desc: Run the assemble example (assemble and execute a sample program)
+    aliases: [run:assemble]
+    preconditions: *cargo
+    env:
+      RUST_LOG: '{{.RUST_LOG}}'
+    cmds:
+      - cargo run --example assemble
+
+  run:sample:
+    desc: Run the sample example (execute a hand-encoded program)
+    preconditions: *cargo
+    env:
+      RUST_LOG: '{{.RUST_LOG}}'
+    cmds:
+      - cargo run --example sample
+
+  docs:
+    desc: Build rustdoc
+    preconditions: *cargo
+    cmds:
+      - cargo doc --no-deps --all-features
+
+  docs:open:
+    desc: Build rustdoc and open it in the browser
+    preconditions: *cargo
+    cmds:
+      - cargo doc --no-deps --all-features --open
+
+  clean:
+    desc: Remove build artifacts
+    preconditions: *cargo
+    status:
+      - test ! -d target
+    cmds:
+      - cargo clean
+
+  ci:
+    desc: Run the checks expected in CI (fmt check, lint, both feature sets, tests)
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: check
+      - task: test
+      - task: test:no-default-features
