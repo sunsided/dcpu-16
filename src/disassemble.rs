@@ -1,6 +1,6 @@
-use crate::instruction_word::{InstructionWord, NonBasicInstruction};
 use crate::instruction::{InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition};
+use crate::instruction_word::{InstructionWord, NonBasicInstruction};
 use crate::Register;
 
 pub trait Disassemble {
@@ -32,49 +32,53 @@ impl Disassemble for ResolvedValue {
     fn disassemble(&self) -> String {
         match self.argument_definition {
             InstructionArgumentDefinition::Register { register } => register.disassemble(),
-            InstructionArgumentDefinition::Literal { value } => String::from(format!("0x{:02X}", value)),
-            InstructionArgumentDefinition::NextWordLiteral => String::from(format!("0x{:02X}", self.resolved_value)),
-            InstructionArgumentDefinition::AtAddressFromNextWord => String::from(format!(
-                "[0x{:02X}]",
-                self.argument.get_literal().unwrap()
-            )),
+            InstructionArgumentDefinition::Literal { value } => {
+                format!("0x{:02X}", value)
+            }
+            InstructionArgumentDefinition::NextWordLiteral => {
+                format!("0x{:02X}", self.resolved_value)
+            }
+            InstructionArgumentDefinition::AtAddressFromNextWord => {
+                format!("[0x{:02X}]", self.argument.get_literal().unwrap())
+            }
             InstructionArgumentDefinition::OfOverflow => String::from("O"),
             InstructionArgumentDefinition::OfProgramCounter => String::from("PC"),
             InstructionArgumentDefinition::OfStackPointer => String::from("SP"),
-            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { .. } => match self.argument {
-                InstructionArgument::AddressOffset { address, register } => {
-                    String::from(format!("[0x{:02X}+{}]", address, register.disassemble()))
+            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { .. } => {
+                match self.argument {
+                    InstructionArgument::AddressOffset { address, register } => {
+                        format!("[0x{:02X}+{}]", address, register.disassemble())
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
-            },
+            }
             InstructionArgumentDefinition::Pop => String::from("POP"),
             InstructionArgumentDefinition::Peek => String::from("PEEK"),
             InstructionArgumentDefinition::Push => String::from("PUSH"),
             InstructionArgumentDefinition::AtAddressFromRegister { register } => {
-                String::from(format!("[{}]", register.disassemble()))
+                format!("[{}]", register.disassemble())
             }
         }
     }
 
     fn disassemble_human(&self) -> String {
         match self.argument_definition {
-            InstructionArgumentDefinition::AtAddressFromNextWord => String::from(format!(
-                "RAM[0x{:02X}]",
-                self.argument.get_literal().unwrap()
-            )),
+            InstructionArgumentDefinition::AtAddressFromNextWord => {
+                format!("RAM[0x{:02X}]", self.argument.get_literal().unwrap())
+            }
             // Value::OfOverflow => String::from("O"),
             // Value::OfProgramCounter => String::from("PC"),
             // Value::OfStackPointer => String::from("SP"),
-            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { .. } => match self.argument {
-                InstructionArgument::AddressOffset { address, register } => String::from(format!(
-                    "RAM[0x{:02X} + {}]",
-                    address,
-                    register.disassemble_human()
-                )),
-                _ => unreachable!(),
-            },
+            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { .. } => {
+                match self.argument {
+                    InstructionArgument::AddressOffset { address, register } => {
+                        format!("RAM[0x{:02X} + {}]", address, register.disassemble_human())
+                    }
+                    _ => unreachable!(),
+                }
+            }
             InstructionArgumentDefinition::AtAddressFromRegister { register } => {
-                String::from(format!("RAM[{}]", register.disassemble_human()))
+                format!("RAM[{}]", register.disassemble_human())
             }
             InstructionArgumentDefinition::Pop => String::from("pop value from stack"),
             InstructionArgumentDefinition::Peek => String::from("current stack value"),
@@ -87,85 +91,85 @@ impl Disassemble for ResolvedValue {
 impl Disassemble for InstructionWithOperands {
     fn disassemble(&self) -> String {
         match self.instruction {
-            InstructionWord::Set { .. } => String::from(format!(
+            InstructionWord::Set { .. } => format!(
                 "SET {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Add { .. } => String::from(format!(
+            ),
+            InstructionWord::Add { .. } => format!(
                 "ADD {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Sub { .. } => String::from(format!(
+            ),
+            InstructionWord::Sub { .. } => format!(
                 "SUB {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Mul { .. } => String::from(format!(
+            ),
+            InstructionWord::Mul { .. } => format!(
                 "MUL {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Div { .. } => String::from(format!(
+            ),
+            InstructionWord::Div { .. } => format!(
                 "DIV {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Mod { .. } => String::from(format!(
+            ),
+            InstructionWord::Mod { .. } => format!(
                 "MOD {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Shl { .. } => String::from(format!(
+            ),
+            InstructionWord::Shl { .. } => format!(
                 "SHL {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Shr { .. } => String::from(format!(
+            ),
+            InstructionWord::Shr { .. } => format!(
                 "SHR {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::And { .. } => String::from(format!(
+            ),
+            InstructionWord::And { .. } => format!(
                 "AND {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Bor { .. } => String::from(format!(
+            ),
+            InstructionWord::Bor { .. } => format!(
                 "BOR {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Xor { .. } => String::from(format!(
+            ),
+            InstructionWord::Xor { .. } => format!(
                 "XOR {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Ife { .. } => String::from(format!(
+            ),
+            InstructionWord::Ife { .. } => format!(
                 "IFE {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Ifn { .. } => String::from(format!(
+            ),
+            InstructionWord::Ifn { .. } => format!(
                 "IFN {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Ifg { .. } => String::from(format!(
+            ),
+            InstructionWord::Ifg { .. } => format!(
                 "IFG {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
-            InstructionWord::Ifb { .. } => String::from(format!(
+            ),
+            InstructionWord::Ifb { .. } => format!(
                 "IFB {}, {}",
                 self.a.disassemble(),
                 self.b.expect("require second argument").disassemble()
-            )),
+            ),
             InstructionWord::NonBasic(nbi) => match nbi {
                 NonBasicInstruction::Reserved => panic!(),
                 NonBasicInstruction::Jsr { .. } => {
-                    String::from(format!("JSR {}", self.a.disassemble()))
+                    format!("JSR {}", self.a.disassemble())
                 }
             },
         }
@@ -173,85 +177,85 @@ impl Disassemble for InstructionWithOperands {
 
     fn disassemble_human(&self) -> String {
         match self.instruction {
-            InstructionWord::Set { .. } => String::from(format!(
+            InstructionWord::Set { .. } => format!(
                 "{0} <- {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Add { .. } => String::from(format!(
+            ),
+            InstructionWord::Add { .. } => format!(
                 "{0} <- {0} + {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Sub { .. } => String::from(format!(
+            ),
+            InstructionWord::Sub { .. } => format!(
                 "{0} <- {0} - {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Mul { .. } => String::from(format!(
+            ),
+            InstructionWord::Mul { .. } => format!(
                 "{0} <- {0} * {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Div { .. } => String::from(format!(
+            ),
+            InstructionWord::Div { .. } => format!(
                 "{0} <- {0} / {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Mod { .. } => String::from(format!(
+            ),
+            InstructionWord::Mod { .. } => format!(
                 "{0} <- {0} % {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Shl { .. } => String::from(format!(
+            ),
+            InstructionWord::Shl { .. } => format!(
                 "{0} <- {0} << {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Shr { .. } => String::from(format!(
+            ),
+            InstructionWord::Shr { .. } => format!(
                 "{0} <- {0} >> {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::And { .. } => String::from(format!(
+            ),
+            InstructionWord::And { .. } => format!(
                 "{0} <- {0} & {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Bor { .. } => String::from(format!(
+            ),
+            InstructionWord::Bor { .. } => format!(
                 "{0} <- {0} | {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Xor { .. } => String::from(format!(
+            ),
+            InstructionWord::Xor { .. } => format!(
                 "{0} <- {0} ^ {1}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Ife { .. } => String::from(format!(
+            ),
+            InstructionWord::Ife { .. } => format!(
                 "execute next instruction if {} == {}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Ifn { .. } => String::from(format!(
+            ),
+            InstructionWord::Ifn { .. } => format!(
                 "execute next instruction if {} != {}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Ifg { .. } => String::from(format!(
+            ),
+            InstructionWord::Ifg { .. } => format!(
                 "execute next instruction if {} > {}",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
-            InstructionWord::Ifb { .. } => String::from(format!(
+            ),
+            InstructionWord::Ifb { .. } => format!(
                 "execute next instruction if ({} & {}) != 0",
                 self.a.disassemble_human(),
                 self.b.expect("require second argument").disassemble_human()
-            )),
+            ),
             InstructionWord::NonBasic(nbi) => match nbi {
                 NonBasicInstruction::Reserved => panic!(),
                 NonBasicInstruction::Jsr { .. } => {
-                    String::from(format!("jump to subroutine at {}", self.a.disassemble()))
+                    format!("jump to subroutine at {}", self.a.disassemble())
                 }
             },
         }

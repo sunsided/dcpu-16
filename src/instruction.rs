@@ -1,18 +1,19 @@
 use crate::disassemble::Disassemble;
-use crate::instruction_word::{InstructionWord};
-use crate::instruction_argument::{InstructionArgumentDefinition, InstructionArgument};
+use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition};
+use crate::instruction_word::InstructionWord;
 use crate::{Word, DCPU16};
 use std::fmt::{Debug, Formatter};
 
 /// A decoded instruction with all extra operands.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)] // word counts are the point; renaming would break the public API
 pub enum Instruction {
     /// An instruction that has one word, i.e., does not take extra operands.
     OneWord {
         /// The decoded instruction word.
         instruction: InstructionWord,
         /// The raw word of the instruction.
-        raw_instruction: Word
+        raw_instruction: Word,
     },
     /// An instruction that has two words, i.e., takes one extra operand.
     TwoWord {
@@ -21,7 +22,7 @@ pub enum Instruction {
         /// The raw word of the instruction.
         raw_instruction: Word,
         /// The first extra operand.
-        raw_1st: Word
+        raw_1st: Word,
     },
     /// An instruction that has three words, i.e., takes two extra operands.
     ThreeWord {
@@ -32,7 +33,7 @@ pub enum Instruction {
         /// The first extra operand.
         raw_1st: Word,
         /// The second extra operand.
-        raw_2nd: Word
+        raw_2nd: Word,
     },
 }
 
@@ -40,9 +41,21 @@ impl Instruction {
     /// Extracts the values of the instruction into a tuple.
     pub fn unpack(&self) -> (Word, InstructionWord, Option<Word>, Option<Word>) {
         match self {
-            Self::OneWord { raw_instruction, instruction} => (*raw_instruction, *instruction, None, None),
-            Self::TwoWord { raw_instruction, instruction, raw_1st: a } => (*raw_instruction, *instruction, Some(*a), None),
-            Self::ThreeWord { raw_instruction, instruction, raw_1st: a, raw_2nd: b } => (* raw_instruction, *instruction, Some(*a), Some(*b)),
+            Self::OneWord {
+                raw_instruction,
+                instruction,
+            } => (*raw_instruction, *instruction, None, None),
+            Self::TwoWord {
+                raw_instruction,
+                instruction,
+                raw_1st: a,
+            } => (*raw_instruction, *instruction, Some(*a), None),
+            Self::ThreeWord {
+                raw_instruction,
+                instruction,
+                raw_1st: a,
+                raw_2nd: b,
+            } => (*raw_instruction, *instruction, Some(*a), Some(*b)),
         }
     }
 }
@@ -96,16 +109,15 @@ impl InstructionWithOperands {
                     a: ResolvedValue {
                         argument_definition: a,
                         argument: lhs_arg,
-                        resolved_value: lhs
+                        resolved_value: lhs,
                     },
                     b: Some(ResolvedValue {
                         argument_definition: b,
                         argument: rhs_arg,
-                        resolved_value: rhs
+                        resolved_value: rhs,
                     }),
                 }
-            }
-            else {
+            } else {
                 // Since we know that the "a" value has no extra operand, we pass it to the second.
                 let (lhs_arg, lhs) = cpu.resolve_argument(a, None);
                 let (rhs_arg, rhs) = cpu.resolve_argument(b, raw_1st);
@@ -117,17 +129,16 @@ impl InstructionWithOperands {
                     a: ResolvedValue {
                         argument_definition: a,
                         argument: lhs_arg,
-                        resolved_value: lhs
+                        resolved_value: lhs,
                     },
                     b: Some(ResolvedValue {
                         argument_definition: b,
                         argument: rhs_arg,
-                        resolved_value: rhs
+                        resolved_value: rhs,
                     }),
                 }
             }
-        }
-        else {
+        } else {
             // A simpler version of above, we just need to anticipate the first operand.
             let (lhs_arg, lhs) = cpu.resolve_argument(a, raw_1st);
             assert!(a.has_extra_words() && raw_1st.is_some() || !a.has_extra_words());
@@ -139,9 +150,9 @@ impl InstructionWithOperands {
                 a: ResolvedValue {
                     argument_definition: a,
                     argument: lhs_arg,
-                    resolved_value: lhs
+                    resolved_value: lhs,
                 },
-                b: None
+                b: None,
             }
         }
     }
@@ -186,7 +197,13 @@ impl Debug for InstructionWithOperands {
             )
         } else {
             assert_eq!(self.a.argument_definition.num_extra_words(), 1);
-            assert_eq!(self.b.expect("require second argument").argument_definition.num_extra_words(), 1);
+            assert_eq!(
+                self.b
+                    .expect("require second argument")
+                    .argument_definition
+                    .num_extra_words(),
+                1
+            );
             write!(
                 f,
                 "{:04x?} {:04x?} {:04x?} ; {} ({:?})",

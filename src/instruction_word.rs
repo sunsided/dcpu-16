@@ -1,7 +1,7 @@
 use crate::instruction_argument::InstructionArgumentDefinition;
+use crate::{Decode, Word};
 use std::fmt::Debug;
 use tracing::trace;
-use crate::{Decode, Word};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InstructionWord {
@@ -10,63 +10,108 @@ pub enum InstructionWord {
     /// Sets `a` to `b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
-    Set { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Set {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a+b`, sets `O` to `0x0001` if there's an overflow, `0x0` otherwise.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
-    Add { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Add {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a-b`, sets `O` to `0xffff` if there's an underflow, `0x0` otherwise.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
-    Sub { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Sub {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a*b`, sets `O` to `((a*b)>>16)&0xffff`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
-    Mul { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Mul {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a/b`, sets `O` to `((a<<16)/b)&0xffff`. if `b==0`, sets `a` and `O` to `0` instead.
     ///
     /// Takes 3 cycles, plus the cost of `a` and `b`.
-    Div { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Div {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a%b`. if `b==0`, sets `a` to `0` instead.
     ///
     /// Takes 3 cycles, plus the cost of `a` and `b`.
-    Mod { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Mod {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a<<b`, sets `O` to `((a<<b)>>16)&0xffff`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
-    Shl { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Shl {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a>>b`, sets `O` to `((a<<16)>>b)&0xffff`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`.
-    Shr { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Shr {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a&b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
-    And { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    And {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a|b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
-    Bor { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Bor {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Sets `a` to `a^b`.
     ///
     /// Takes 1 cycle, plus the cost of `a` and `b`.
-    Xor { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Xor {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Performs next instruction only if `a==b`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
-    Ife { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Ife {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Performs next instruction only if `a!=b`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
-    Ifn { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Ifn {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Performs next instruction only if `a>b`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
-    Ifg { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Ifg {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
     /// Performs next instruction only if `(a&b)!=0`.
     ///
     /// Takes 2 cycles, plus the cost of `a` and `b`, plus 1 if the test fails.
-    Ifb { a: InstructionArgumentDefinition, b: InstructionArgumentDefinition },
+    Ifb {
+        a: InstructionArgumentDefinition,
+        b: InstructionArgumentDefinition,
+    },
 }
 
 /// Non-basic opcodes always have their lower four bits unset, have one value and a six bit opcode.
@@ -161,7 +206,12 @@ impl InstructionWord {
     }
 
     /// Unpacks the instruction arguments into a first value and an optional second value.
-    pub fn unpack(&self) -> (InstructionArgumentDefinition, Option<InstructionArgumentDefinition>) {
+    pub fn unpack(
+        &self,
+    ) -> (
+        InstructionArgumentDefinition,
+        Option<InstructionArgumentDefinition>,
+    ) {
         match self {
             Self::NonBasic(op) => op.unpack(),
             Self::Set { a, b } => (*a, Some(*b)),
@@ -195,7 +245,12 @@ impl NonBasicInstruction {
     }
 
     /// Unpacks the instruction arguments into a first value and an optional second value.
-    pub fn unpack(&self) -> (InstructionArgumentDefinition, Option<InstructionArgumentDefinition>) {
+    pub fn unpack(
+        &self,
+    ) -> (
+        InstructionArgumentDefinition,
+        Option<InstructionArgumentDefinition>,
+    ) {
         match self {
             Self::Reserved => panic!(),
             Self::Jsr { a } => (*a, None),
@@ -204,6 +259,7 @@ impl NonBasicInstruction {
 }
 
 #[cfg(test)]
+#[allow(clippy::unusual_byte_groupings)] // literals grouped as b_a_o fields of an instruction word
 mod tests {
     use super::*;
     use crate::register::Register;

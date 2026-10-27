@@ -75,7 +75,7 @@ where
                         replace_list.push((i, new_instruction));
 
                         // Update the labels.
-                        for (_label, label_pos) in label_map.iter_mut() {
+                        for label_pos in label_map.values_mut() {
                             if *label_pos > current_position {
                                 *label_pos = (*label_pos as i64 + difference) as Word;
                             }
@@ -86,7 +86,7 @@ where
         }
 
         // If no instruction was replaced we arrived at a local optimum.
-        if replace_list.len() == 0 {
+        if replace_list.is_empty() {
             break;
         }
 
@@ -108,7 +108,7 @@ where
 /// Writes a materialized instruction into the bytestream.
 /// A final pass of jump label address substitution is performed.
 fn write_materialized_instruction_into_bytestream(
-    mut bytesteam: &mut Vec<u16>,
+    bytesteam: &mut Vec<u16>,
     entry: MaterializedInstruction,
     label_map: &mut HashMap<String, u16>,
 ) {
@@ -125,7 +125,7 @@ fn write_materialized_instruction_into_bytestream(
                 instruction = instruction,
                 words = length
             );
-            write_instruction_word_into_bytestream(&mut bytesteam, instruction_word, arg1, arg2)
+            write_instruction_word_into_bytestream(bytesteam, instruction_word, arg1, arg2)
         }
         MaterializedInstruction::Flexible { instruction, .. } => {
             // We perform a final pass of baking the actual jump addresses
@@ -135,14 +135,14 @@ fn write_materialized_instruction_into_bytestream(
                 instruction_word,
                 arg1,
                 arg2,
-            } = instruction.materialize(&label_map)
+            } = instruction.materialize(label_map)
             {
                 trace!(
                     "instruction {instruction:?}, len = {words}",
                     instruction = instruction,
                     words = length
                 );
-                write_instruction_word_into_bytestream(&mut bytesteam, instruction_word, arg1, arg2)
+                write_instruction_word_into_bytestream(bytesteam, instruction_word, arg1, arg2)
             } else {
                 unreachable!();
             }
@@ -158,11 +158,11 @@ fn write_instruction_word_into_bytestream(
     arg2: Option<u16>,
 ) {
     bytesteam.push(instruction_word);
-    if arg1.is_some() {
-        bytesteam.push(arg1.unwrap());
+    if let Some(arg1) = arg1 {
+        bytesteam.push(arg1);
     }
-    if arg2.is_some() {
-        bytesteam.push(arg2.unwrap());
+    if let Some(arg2) = arg2 {
+        bytesteam.push(arg2);
     }
 }
 
@@ -256,26 +256,26 @@ enum Value {
 /// A basic operation with two arguments.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum BasicOperationName {
-    SET,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    MOD,
-    SHL,
-    SHR,
-    AND,
-    BOR,
-    XOR,
-    IFE,
-    IFN,
-    IFG,
-    IFB,
+    Set,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Shl,
+    Shr,
+    And,
+    Bor,
+    Xor,
+    Ife,
+    Ifn,
+    Ifg,
+    Ifb,
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum NonBasicOperationName {
-    JSR,
+    Jsr,
 }
 
 impl BasicOperationName {
@@ -286,21 +286,21 @@ impl BasicOperationName {
         b: InstructionArgument,
     ) -> (Word, Option<Word>, Option<Word>) {
         let opcode = match self {
-            Self::SET => 0x1,
-            Self::ADD => 0x2,
-            Self::SUB => 0x3,
-            Self::MUL => 0x4,
-            Self::DIV => 0x5,
-            Self::MOD => 0x6,
-            Self::SHL => 0x7,
-            Self::SHR => 0x8,
-            Self::AND => 0x9,
-            Self::BOR => 0xA,
-            Self::XOR => 0xB,
-            Self::IFE => 0xC,
-            Self::IFN => 0xD,
-            Self::IFG => 0xE,
-            Self::IFB => 0xF,
+            Self::Set => 0x1,
+            Self::Add => 0x2,
+            Self::Sub => 0x3,
+            Self::Mul => 0x4,
+            Self::Div => 0x5,
+            Self::Mod => 0x6,
+            Self::Shl => 0x7,
+            Self::Shr => 0x8,
+            Self::And => 0x9,
+            Self::Bor => 0xA,
+            Self::Xor => 0xB,
+            Self::Ife => 0xC,
+            Self::Ifn => 0xD,
+            Self::Ifg => 0xE,
+            Self::Ifb => 0xF,
         };
 
         let a_baked = a.bake_argument();
@@ -321,7 +321,7 @@ impl NonBasicOperationName {
     /// Bakes the instruction and its arguments into bytecode.
     fn bake(&self, a: InstructionArgument) -> (Word, Option<Word>) {
         let opcode = match self {
-            Self::JSR => 0x1,
+            Self::Jsr => 0x1,
         };
 
         let a_baked = a.bake_argument();
@@ -346,7 +346,7 @@ impl InstructionArgument {
     fn bake_argument(&self) -> MaterializedValue {
         match self {
             Self::Register(register) => MaterializedValue {
-                inline: (*register as usize + 0x00) as u8,
+                inline: (*register as usize) as u8,
                 literal: None,
             },
             Self::AddressFromRegister(register) => MaterializedValue {
@@ -538,28 +538,28 @@ impl Instruction {
 
 fn parse_basic_operation(pair: Pair<Rule>) -> BasicOperationName {
     match pair.as_str() {
-        "SET" => BasicOperationName::SET,
-        "ADD" => BasicOperationName::ADD,
-        "SUB" => BasicOperationName::SUB,
-        "MUL" => BasicOperationName::MUL,
-        "DIV" => BasicOperationName::DIV,
-        "MOD" => BasicOperationName::MOD,
-        "SHL" => BasicOperationName::SHL,
-        "SHR" => BasicOperationName::SHR,
-        "AND" => BasicOperationName::AND,
-        "BOR" => BasicOperationName::BOR,
-        "XOR" => BasicOperationName::XOR,
-        "IFE" => BasicOperationName::IFE,
-        "IFN" => BasicOperationName::IFN,
-        "IFG" => BasicOperationName::IFG,
-        "IFB" => BasicOperationName::IFB,
+        "SET" => BasicOperationName::Set,
+        "ADD" => BasicOperationName::Add,
+        "SUB" => BasicOperationName::Sub,
+        "MUL" => BasicOperationName::Mul,
+        "DIV" => BasicOperationName::Div,
+        "MOD" => BasicOperationName::Mod,
+        "SHL" => BasicOperationName::Shl,
+        "SHR" => BasicOperationName::Shr,
+        "AND" => BasicOperationName::And,
+        "BOR" => BasicOperationName::Bor,
+        "XOR" => BasicOperationName::Xor,
+        "IFE" => BasicOperationName::Ife,
+        "IFN" => BasicOperationName::Ifn,
+        "IFG" => BasicOperationName::Ifg,
+        "IFB" => BasicOperationName::Ifb,
         _ => unimplemented!(),
     }
 }
 
 fn parse_nonbasic_operation(pair: Pair<Rule>) -> NonBasicOperationName {
     match pair.as_str() {
-        "JSR" => NonBasicOperationName::JSR,
+        "JSR" => NonBasicOperationName::Jsr,
         _ => unimplemented!(),
     }
 }
@@ -613,9 +613,10 @@ fn parse_literal(pair: Pair<Rule>) -> Value {
 
 fn parse_literal_raw(pair: Pair<Rule>) -> Word {
     match pair.as_rule() {
-        Rule::value_dec => {
-            u16::from_str_radix(pair.as_str(), 10).expect("invalid format for decimal literal")
-        }
+        Rule::value_dec => pair
+            .as_str()
+            .parse()
+            .expect("invalid format for decimal literal"),
         Rule::value_hex => u16::from_str_radix(pair.as_str().trim_start_matches("0x"), 16)
             .expect("invalid format for hex literal"),
         _ => unreachable!(),

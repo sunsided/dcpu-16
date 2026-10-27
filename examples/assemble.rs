@@ -48,7 +48,7 @@ fn main() {
         :crash        SET PC, crash            ; 7dc1 001a
     ";
 
-    let program = assemble(&source);
+    let program = assemble(source);
 
     let mut cpu = DCPU16::new(program.as_slice());
     println!("{}", cpu.hexdump_program(8));
