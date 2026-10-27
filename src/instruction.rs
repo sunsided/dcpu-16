@@ -1,7 +1,7 @@
 //! Decoded instructions together with their extra operand words.
 
 use crate::disassemble::Disassemble;
-use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition};
+use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition, Location};
 use crate::instruction_word::InstructionWord;
 use crate::{Word, DCPU16};
 use std::fmt::{Debug, Formatter};
@@ -69,14 +69,16 @@ pub struct ResolvedValue {
     pub argument_definition: InstructionArgumentDefinition,
     /// The interpreted address from the value.
     pub argument: InstructionArgument,
+    /// Where the value was read from and where a result is written to.
+    pub location: Location,
     /// The resolved value.
     pub resolved_value: Word,
 }
 
 impl ResolvedValue {
-    /// Unpacks the value into a system address and the resolved value.
-    pub fn unpack(&self) -> (InstructionArgument, Word) {
-        (self.argument, self.resolved_value)
+    /// Unpacks the value into its location and the resolved value.
+    pub fn unpack(&self) -> (Location, Word) {
+        (self.location, self.resolved_value)
     }
 }
 
@@ -94,72 +96,50 @@ pub struct InstructionWithOperands {
 
 impl InstructionWithOperands {
     /// Resolves the values for each argument of the instruction word.
+    ///
+    /// The operands are resolved in order, `a` before `b`, so side effects such as
+    /// `PUSH` and `POP` apply in that order.
     pub fn resolve(cpu: &mut DCPU16, instruction: Instruction) -> Self {
+        Self::with_operands(instruction, |definition, word| {
+            cpu.resolve_argument(definition, word)
+        })
+    }
+
+    /// Like [`Self::resolve`], but without side effects: the stack pointer does not move.
+    /// Used to describe instructions that are skipped.
+    pub fn inspect(cpu: &DCPU16, instruction: Instruction) -> Self {
+        Self::with_operands(instruction, |definition, word| {
+            cpu.inspect_argument(definition, word)
+        })
+    }
+
+    /// Pairs each operand definition with its extra word and resolves it with `operand`.
+    fn with_operands(
+        instruction: Instruction,
+        mut operand: impl FnMut(InstructionArgumentDefinition, Option<Word>) -> ResolvedValue,
+    ) -> Self {
         let (raw_instruction, instruction_word, raw_1st, raw_2nd) = instruction.unpack();
 
         // Get the "a" and "b" value definitions from the original instruction.
         let (a, b) = instruction_word.unpack();
 
-        // Most instructions have two operands.
-        if let Some(b) = b {
-            // The "a" value always exists, however it may use an "inline" value, e.g. a
-            // register or default literal. In that case the "first operand" provided to the
-            // instruction really belongs to the second value, i.e., "b".
-            if a.has_extra_words() {
-                let (lhs_arg, lhs) = cpu.resolve_argument(a, raw_1st);
-                let (rhs_arg, rhs) = cpu.resolve_argument(b, raw_2nd);
-
-                InstructionWithOperands {
-                    raw_instruction,
-                    instruction: instruction_word,
-                    a: ResolvedValue {
-                        argument_definition: a,
-                        argument: lhs_arg,
-                        resolved_value: lhs,
-                    },
-                    b: Some(ResolvedValue {
-                        argument_definition: b,
-                        argument: rhs_arg,
-                        resolved_value: rhs,
-                    }),
-                }
-            } else {
-                // Since we know that the "a" value has no extra operand, we pass it to the second.
-                let (lhs_arg, lhs) = cpu.resolve_argument(a, None);
-                let (rhs_arg, rhs) = cpu.resolve_argument(b, raw_1st);
-                assert!(raw_2nd.is_none());
-
-                InstructionWithOperands {
-                    raw_instruction,
-                    instruction: instruction_word,
-                    a: ResolvedValue {
-                        argument_definition: a,
-                        argument: lhs_arg,
-                        resolved_value: lhs,
-                    },
-                    b: Some(ResolvedValue {
-                        argument_definition: b,
-                        argument: rhs_arg,
-                        resolved_value: rhs,
-                    }),
-                }
-            }
+        // The extra words follow the instruction in operand order. If "a" uses an
+        // inline value, e.g. a register or short literal, the first extra word
+        // belongs to "b".
+        let (a_word, b_word) = if a.has_extra_words() {
+            (raw_1st, raw_2nd)
         } else {
-            // A simpler version of above, we just need to anticipate the first operand.
-            let (lhs_arg, lhs) = cpu.resolve_argument(a, raw_1st);
-            assert!(a.has_extra_words() && raw_1st.is_some() || !a.has_extra_words());
-            assert!(raw_2nd.is_none());
+            (None, raw_1st)
+        };
 
-            InstructionWithOperands {
-                raw_instruction,
-                instruction: instruction_word,
-                a: ResolvedValue {
-                    argument_definition: a,
-                    argument: lhs_arg,
-                    resolved_value: lhs,
-                },
-                b: None,
-            }
+        let a = operand(a, a_word);
+        let b = b.map(|b| operand(b, b_word));
+
+        InstructionWithOperands {
+            raw_instruction,
+            instruction: instruction_word,
+            a,
+            b,
         }
     }
 

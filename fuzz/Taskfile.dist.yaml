@@ -1,9 +1,9 @@
-# Fuzz tasks for the assembler; included from the root Taskfile as `fuzz:`.
+# Fuzz tasks for the assembler and emulator; included from the root Taskfile as `fuzz:`.
 # https://taskfile.dev
 version: '3'
 
 vars:
-  TARGETS: assemble assemble_valid
+  TARGETS: assemble assemble_valid execute
   TARGET: '{{ .TARGET | default "assemble" }}'
   SECONDS: '{{ .SECONDS | default "30" }}'
 
@@ -25,12 +25,12 @@ tasks:
       - cargo +nightly fuzz build
 
   run:
-    desc: Fuzz one target until stopped (TARGET=assemble|assemble_valid, libFuzzer flags after --)
+    desc: Fuzz one target until stopped (TARGET=assemble|assemble_valid|execute, libFuzzer flags after --)
     preconditions: *fuzz
     requires:
       vars:
         - name: TARGET
-          enum: [assemble, assemble_valid]
+          enum: [assemble, assemble_valid, execute]
     cmds:
       - cargo +nightly fuzz run {{.TARGET}} -- -dict=assembler.dict {{.CLI_ARGS}}
 

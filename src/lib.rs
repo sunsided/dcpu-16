@@ -17,9 +17,9 @@ mod register;
 
 #[cfg(feature = "assembler")]
 pub use crate::assembler::{assemble, AssembleError, AssembleErrorKind, Position};
-use crate::instruction::{Instruction, InstructionWithOperands};
+use crate::instruction::{Instruction, InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{
-    InstructionArgument, InstructionArgumentDefinition, SpecialRegister, StackOperation,
+    InstructionArgument, InstructionArgumentDefinition, Location, SpecialRegister, StackOperation,
 };
 use crate::instruction_word::{InstructionWord, NonBasicInstruction};
 pub use crate::register::Register;
@@ -37,8 +37,9 @@ const NUM_RAM_WORDS: usize = 0x10000;
 /// Largest program, in words, that [`DCPU16::new`] accepts.
 const MAX_PROGRAM_WORDS: usize = u16::MAX as usize - 1;
 
-/// Initial stack pointer: the last RAM word, `0xffff`; the stack grows downwards.
-const STACK_POINTER_INIT: usize = NUM_RAM_WORDS - 1;
+/// Initial stack pointer. `PUSH` is `[--SP]`, so the first value pushed lands in
+/// the last RAM word, `0xffff`, and the stack grows downwards from there.
+const STACK_POINTER_INIT: Word = 0;
 
 /// Decoding of instructions or values.
 trait Decode {
@@ -47,7 +48,7 @@ trait Decode {
 }
 
 /// A DCPU-16 emulator.
-pub struct DCPU16<'p> {
+pub struct DCPU16 {
     /// RAM.
     ram: Box<[Word; NUM_RAM_WORDS]>,
     /// Registers.
@@ -63,29 +64,34 @@ pub struct DCPU16<'p> {
     ///
     /// This value is used to determine a "crash loop" (a jump to the same instruction).
     previous_program_counter: Word,
-    /// The program
-    program: &'p [u16],
+    /// Number of program words loaded at address `0`; execution ends when the
+    /// program counter moves past them.
+    program_length: usize,
     /// Indicates whether the next instruction should be skipped.
-    skip_next_intruction: bool,
+    skip_next_instruction: bool,
 }
 
-impl<'p> DCPU16<'p> {
-    /// Creates a CPU with cleared registers and RAM that executes `program` from address `0`.
+impl DCPU16 {
+    /// Creates a CPU with cleared registers and loads `program` into RAM at address `0`,
+    /// where it executes from. Like any other RAM, the program can read and overwrite itself.
     ///
     /// # Panics
     ///
     /// Panics if the program is longer than 65534 words.
-    pub fn new(program: &'p [u16]) -> Self {
+    pub fn new(program: &[u16]) -> Self {
         assert!(program.len() <= MAX_PROGRAM_WORDS);
+        let mut ram = Box::new([0; NUM_RAM_WORDS]);
+        ram[..program.len()].copy_from_slice(program);
+
         let cpu = Self {
-            ram: Box::new([0; NUM_RAM_WORDS]),
+            ram,
             registers: [0; NUM_REGISTERS],
             program_counter: 0,
-            stack_pointer: STACK_POINTER_INIT as _,
+            stack_pointer: STACK_POINTER_INIT,
             overflow: 0,
-            program,
+            program_length: program.len(),
             previous_program_counter: 0,
-            skip_next_intruction: false,
+            skip_next_instruction: false,
         };
 
         info!(
@@ -106,24 +112,38 @@ impl<'p> DCPU16<'p> {
         self.ram.as_ref()
     }
 
-    /// Gets a reference to the RAM.
-    pub fn ram_mut(&mut self) -> &[u16; NUM_RAM_WORDS] {
+    /// Gets a mutable reference to the RAM.
+    pub fn ram_mut(&mut self) -> &mut [u16; NUM_RAM_WORDS] {
         self.ram.as_mut()
     }
 
-    /// Executes the program until a crash loop is detected.
+    /// Executes the program until it ends, hits a reserved opcode or a crash loop is detected.
     pub fn run(&mut self) {
         while self.step() {}
     }
 
     /// Executes a single instruction of the program.
+    ///
+    /// Returns `false` once execution should stop: at the end of the program,
+    /// on a reserved opcode, or when an instruction jumps to itself.
     pub fn step(&mut self) -> bool {
         self.previous_program_counter = self.program_counter;
         let instruction = self.read_instruction();
 
-        if self.skip_next_intruction {
+        if self.skip_next_instruction {
+            // Skipped instructions are not resolved, so their operands have no side effects.
             self.execute_skipped_instruction(instruction);
         } else {
+            let (_, instruction_word, _, _) = instruction.unpack();
+            if instruction_word == InstructionWord::NonBasic(NonBasicInstruction::Reserved) {
+                warn!(
+                    "Reserved opcode at PC={pc:04X} - terminating",
+                    pc = self.previous_program_counter
+                );
+                return false;
+            }
+
+            let instruction = InstructionWithOperands::resolve(self, instruction);
             if !self.execute_instruction(instruction) {
                 return false;
             }
@@ -132,7 +152,7 @@ impl<'p> DCPU16<'p> {
         // We print the state after the execution.
         self.dump_registers();
 
-        if (self.program_counter as usize) < self.program.len() {
+        if (self.program_counter as usize) < self.program_length {
             return true;
         }
 
@@ -141,13 +161,23 @@ impl<'p> DCPU16<'p> {
     }
 
     /// "Executes" a skipped instruction.
-    fn execute_skipped_instruction(&mut self, instruction: InstructionWithOperands) {
-        debug!(
-            "SKIP {operation_pc:04X}: {instruction:?}",
-            operation_pc = self.previous_program_counter,
-            instruction = instruction
-        );
-        self.skip_next_intruction = false;
+    fn execute_skipped_instruction(&mut self, instruction: Instruction) {
+        let (raw_instruction, instruction_word, _, _) = instruction.unpack();
+        if instruction_word == InstructionWord::NonBasic(NonBasicInstruction::Reserved) {
+            // Reserved opcodes have no operands to describe.
+            debug!(
+                "SKIP {operation_pc:04X}: {raw_instruction:04x} ; reserved",
+                operation_pc = self.previous_program_counter,
+            );
+        } else {
+            let instruction = InstructionWithOperands::inspect(self, instruction);
+            debug!(
+                "SKIP {operation_pc:04X}: {instruction:?}",
+                operation_pc = self.previous_program_counter,
+                instruction = instruction
+            );
+        }
+        self.skip_next_instruction = false;
     }
 
     /// Executes an instruction.
@@ -160,17 +190,17 @@ impl<'p> DCPU16<'p> {
 
         match instruction.instruction {
             InstructionWord::NonBasic(nbi) => match nbi {
-                NonBasicInstruction::Reserved => panic!(),
+                NonBasicInstruction::Reserved => unreachable!("reserved opcodes stop in step()"),
                 NonBasicInstruction::Jsr { .. } => {
                     assert!(instruction.b.is_none());
-                    self.stack_pointer -= 1;
+                    self.stack_pointer = self.stack_pointer.wrapping_sub(1);
                     self.ram[self.stack_pointer as usize] = self.program_counter;
                     self.program_counter = instruction.a.resolved_value;
                 }
             },
             InstructionWord::Set { .. } => {
                 self.store_value(
-                    instruction.a.argument,
+                    instruction.a.location,
                     instruction
                         .b
                         .expect("require second argument")
@@ -223,16 +253,18 @@ impl<'p> DCPU16<'p> {
             InstructionWord::Shl { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.expect("require second argument").unpack();
-                let result = lhs << rhs;
-                self.overflow = ((((lhs as u32) << (rhs as u32)) >> 16) & 0xffff) as u16;
-                self.store_value(a, result);
+                // Shifting by 32 or more leaves nothing in either word.
+                let shifted = u32::from(lhs).checked_shl(rhs.into()).unwrap_or(0);
+                self.overflow = (shifted >> 16) as Word;
+                self.store_value(a, shifted as Word);
             }
             InstructionWord::Shr { .. } => {
                 let (a, lhs) = instruction.a.unpack();
                 let (_, rhs) = instruction.b.expect("require second argument").unpack();
-                let result = lhs >> rhs;
-                self.overflow = ((((lhs as u32) << 16) >> (rhs as u32)) & 0xffff) as u16;
-                self.store_value(a, result);
+                // `a` sits in the high word so the bits shifted out land in the low word.
+                let shifted = (u32::from(lhs) << 16).checked_shr(rhs.into()).unwrap_or(0);
+                self.overflow = shifted as Word;
+                self.store_value(a, (shifted >> 16) as Word);
             }
             InstructionWord::And { .. } => {
                 let (a, lhs) = instruction.a.unpack();
@@ -259,7 +291,7 @@ impl<'p> DCPU16<'p> {
                     .expect("require second argument")
                     .resolved_value;
                 if !(lhs == rhs) {
-                    self.skip_next_intruction = true;
+                    self.skip_next_instruction = true;
                 }
             }
             InstructionWord::Ifn { .. } => {
@@ -269,7 +301,7 @@ impl<'p> DCPU16<'p> {
                     .expect("require second argument")
                     .resolved_value;
                 if !(lhs != rhs) {
-                    self.skip_next_intruction = true;
+                    self.skip_next_instruction = true;
                 }
             }
             InstructionWord::Ifg { .. } => {
@@ -279,7 +311,7 @@ impl<'p> DCPU16<'p> {
                     .expect("require second argument")
                     .resolved_value;
                 if !(lhs > rhs) {
-                    self.skip_next_intruction = true;
+                    self.skip_next_instruction = true;
                 }
             }
             InstructionWord::Ifb { .. } => {
@@ -288,8 +320,8 @@ impl<'p> DCPU16<'p> {
                     .b
                     .expect("require second argument")
                     .resolved_value;
-                if !(lhs.bitor(rhs) != 0) {
-                    self.skip_next_intruction = true;
+                if lhs.bitand(rhs) == 0 {
+                    self.skip_next_instruction = true;
                 }
             }
         }
@@ -309,13 +341,13 @@ impl<'p> DCPU16<'p> {
     }
 
     /// Reads the instruction at the program counter, including its extra operand words,
-    /// advances the program counter past it and resolves its operands.
-    fn read_instruction(&mut self) -> InstructionWithOperands {
+    /// and advances the program counter past it. Operands are not resolved yet.
+    fn read_instruction(&mut self) -> Instruction {
         let raw_instruction = self.read_word_and_advance_pc();
         let instruction_word = InstructionWord::decode(raw_instruction);
         assert!(instruction_word.length_in_words() >= 1);
 
-        let instruction = match instruction_word.length_in_words() {
+        match instruction_word.length_in_words() {
             1 => Instruction::OneWord {
                 raw_instruction,
                 instruction: instruction_word,
@@ -332,108 +364,121 @@ impl<'p> DCPU16<'p> {
                 raw_2nd: self.read_word_and_advance_pc(),
             },
             _ => unreachable!(),
-        };
-
-        InstructionWithOperands::resolve(self, instruction)
+        }
     }
 
-    /// Reads the value at the current program counter and advances the program counter.
+    /// Reads the word at the program counter from RAM and advances the program counter.
     fn read_word_and_advance_pc(&mut self) -> u16 {
-        let value = self.program[self.program_counter as usize];
-        self.program_counter += 1;
+        let value = self.ram[self.program_counter as usize];
+        self.program_counter = self.program_counter.wrapping_add(1);
         value
     }
 
-    /// Shorthand for [`InstructionArgument::from()`] followed by [`Self::read_value()`].
-    /// Returns the address and the value at the address.
+    /// Decodes an operand, resolves it to its [`Location`] and reads the value there.
     fn resolve_argument(
         &mut self,
-        value: InstructionArgumentDefinition,
+        definition: InstructionArgumentDefinition,
         operand: Option<Word>,
-    ) -> (InstructionArgument, Word) {
-        let argument = InstructionArgument::from(value, operand);
-        (argument, self.read_value(argument))
+    ) -> ResolvedValue {
+        let argument = InstructionArgument::from(definition, operand);
+        let location = self.locate(argument);
+        ResolvedValue {
+            argument_definition: definition,
+            argument,
+            location,
+            resolved_value: self.read_value(location),
+        }
     }
 
-    /// Reads the value from the specified argument.
-    fn read_value(&mut self, address: InstructionArgument) -> Word {
-        match address {
-            InstructionArgument::Literal(value) => value,
-            InstructionArgument::Register(register) => self.registers[register as usize],
-            InstructionArgument::Address(address) => self.ram[address as usize],
+    /// Like [`Self::resolve_argument`], but without moving the stack pointer.
+    fn inspect_argument(
+        &self,
+        definition: InstructionArgumentDefinition,
+        operand: Option<Word>,
+    ) -> ResolvedValue {
+        let argument = InstructionArgument::from(definition, operand);
+        let location = self.location_of(argument);
+        ResolvedValue {
+            argument_definition: definition,
+            argument,
+            location,
+            resolved_value: self.read_value(location),
+        }
+    }
+
+    /// Resolves an argument to the location it reads from and writes to, then
+    /// applies its side effect.
+    ///
+    /// This is the only place where `PUSH` and `POP` move the stack pointer,
+    /// so each operand moves it exactly once.
+    fn locate(&mut self, argument: InstructionArgument) -> Location {
+        let location = self.location_of(argument);
+        match argument {
+            InstructionArgument::StackOperation(StackOperation::Pop) => {
+                self.stack_pointer = self.stack_pointer.wrapping_add(1);
+            }
+            InstructionArgument::StackOperation(StackOperation::Push) => {
+                self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+            }
+            _ => {}
+        }
+        location
+    }
+
+    /// Computes the location an argument reads from and writes to, without side effects.
+    /// All address arithmetic wraps around the 16-bit address space.
+    fn location_of(&self, argument: InstructionArgument) -> Location {
+        match argument {
+            InstructionArgument::Literal(value) => Location::Literal(value),
+            InstructionArgument::Register(register) => Location::Register(register),
+            InstructionArgument::Address(address) => Location::Ram(address),
             InstructionArgument::AddressFromRegister(register) => {
-                let address = self.registers[register as usize];
-                self.ram[address as usize]
+                Location::Ram(self.registers[register as usize])
             }
             InstructionArgument::AddressOffset { address, register } => {
-                let offset = self.registers[register as usize];
-                self.ram[address as usize + offset as usize]
+                Location::Ram(address.wrapping_add(self.registers[register as usize]))
             }
-            InstructionArgument::SpecialRegister(register) => match register {
-                SpecialRegister::ProgramCounter => self.program_counter,
-                SpecialRegister::StackPointer => self.stack_pointer,
-                SpecialRegister::Overflow => self.overflow,
-            },
+            InstructionArgument::SpecialRegister(register) => Location::SpecialRegister(register),
             InstructionArgument::StackOperation(operation) => match operation {
-                StackOperation::Peek => self.ram[self.stack_pointer as usize],
-                StackOperation::Pop => {
-                    let address = self.stack_pointer;
-                    self.stack_pointer += 1;
-                    self.ram[address as usize]
-                }
-                StackOperation::Push => {
-                    warn!("Detected write from a PUSH");
-                    self.stack_pointer -= 1;
-                    let address = self.stack_pointer;
-                    self.ram[address as usize]
-                }
+                StackOperation::Peek | StackOperation::Pop => Location::Ram(self.stack_pointer),
+                StackOperation::Push => Location::Ram(self.stack_pointer.wrapping_sub(1)),
             },
         }
     }
 
-    /// Stores the value to the specified address.
-    fn store_value(&mut self, address: InstructionArgument, value: Word) {
-        match address {
+    /// Reads the value at the specified location.
+    fn read_value(&self, location: Location) -> Word {
+        match location {
+            Location::Literal(value) => value,
+            Location::Register(register) => self.registers[register as usize],
+            Location::Ram(address) => self.ram[address as usize],
+            Location::SpecialRegister(register) => match register {
+                SpecialRegister::ProgramCounter => self.program_counter,
+                SpecialRegister::StackPointer => self.stack_pointer,
+                SpecialRegister::Overflow => self.overflow,
+            },
+        }
+    }
+
+    /// Stores the value to the specified location.
+    fn store_value(&mut self, location: Location, value: Word) {
+        match location {
             // Specification:
             // If any instruction tries to assign a literal value, the assignment fails silently.
             // Other than that, the instruction behaves as normal.
-            InstructionArgument::Literal(_) => {
+            Location::Literal(literal) => {
                 trace!(
                     "Skipping literal assignment of word {word:04X} to literal {literal:04X}",
                     word = value,
-                    literal = address.get_literal().unwrap()
+                    literal = literal
                 )
             }
-            InstructionArgument::Register(register) => self.registers[register as usize] = value,
-            InstructionArgument::Address(address) => self.ram[address as usize] = value,
-            InstructionArgument::AddressFromRegister(register) => {
-                self.ram[self.registers[register as usize] as usize] = value
-            }
-            InstructionArgument::AddressOffset { address, register } => {
-                let register_value = self.registers[register as usize];
-                self.ram[address as usize + register_value as usize] = value
-            }
-            InstructionArgument::SpecialRegister(register) => match register {
+            Location::Register(register) => self.registers[register as usize] = value,
+            Location::Ram(address) => self.ram[address as usize] = value,
+            Location::SpecialRegister(register) => match register {
                 SpecialRegister::ProgramCounter => self.program_counter = value,
                 SpecialRegister::StackPointer => self.stack_pointer = value,
                 SpecialRegister::Overflow => self.overflow = value,
-            },
-            InstructionArgument::StackOperation(register) => match register {
-                StackOperation::Peek => {
-                    warn!("Detected write to a PEEK");
-                    self.ram[self.stack_pointer as usize] = value
-                }
-                StackOperation::Pop => {
-                    warn!("Detected write to a POP");
-                    let address = self.stack_pointer;
-                    self.stack_pointer += 1;
-                    self.ram[address as usize] = value
-                }
-                StackOperation::Push => {
-                    self.stack_pointer -= 1;
-                    let address = self.stack_pointer;
-                    self.ram[address as usize] = value
-                }
             },
         }
     }
@@ -456,21 +501,23 @@ impl<'p> DCPU16<'p> {
         );
     }
 
-    /// Formats the program as a hex dump with `words_per_row` words per line,
-    /// each line prefixed with its start address.
+    /// Formats the program region of RAM as a hex dump with `words_per_row` words per line,
+    /// each line prefixed with its start address. Words the program has overwritten
+    /// show their current value.
     ///
     /// # Panics
     ///
     /// Panics if `words_per_row` is zero.
     pub fn hexdump_program(&self, words_per_row: usize) -> String {
         assert!(words_per_row > 0);
+        let program = &self.ram[..self.program_length];
         let newline = String::from('\n');
         let length_of_newline = newline.len();
         debug_assert_eq!(length_of_newline, 1);
 
         let row_length = (4 + 1) + (1 + 4) * words_per_row + length_of_newline;
-        let row_count = self.program.len() / words_per_row;
-        let remainder = self.program.len() % words_per_row;
+        let row_count = program.len() / words_per_row;
+        let remainder = program.len() % words_per_row;
         let mut expected_num_characters = row_length * row_count;
         if remainder > 0 {
             expected_num_characters += row_length;
@@ -482,7 +529,7 @@ impl<'p> DCPU16<'p> {
             let row_start = row * words_per_row;
             dump.push_str(format!("{:04X}:", row_start).as_str());
             for word in 0..words_per_row {
-                dump.push_str(format!(" {:04X}", self.program[row_start + word]).as_str());
+                dump.push_str(format!(" {:04X}", program[row_start + word]).as_str());
             }
             dump.push_str(newline.as_str())
         }
@@ -492,7 +539,7 @@ impl<'p> DCPU16<'p> {
                 let row_start = row * words_per_row;
                 dump.push_str(format!("{:04X}:", row_start).as_str());
                 for word in 0..remainder {
-                    dump.push_str(format!(" {:04X}", self.program[row_start + word]).as_str());
+                    dump.push_str(format!(" {:04X}", program[row_start + word]).as_str());
                 }
                 for _ in remainder..words_per_row {
                     dump.push_str("     ");
