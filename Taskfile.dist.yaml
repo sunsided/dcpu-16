@@ -40,6 +40,24 @@ tasks:
       - cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
       - task: fmt
 
+  lint:actions:
+    desc: Lint GitHub Actions workflows with actionlint and zizmor
+    vars:
+      ACTIONLINT:
+        sh: |
+          if command -v actionlint >/dev/null; then echo actionlint
+          else echo 'docker run --rm --volume "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12'; fi
+      ZIZMOR:
+        sh: if command -v zizmor >/dev/null; then echo zizmor; else echo uvx zizmor@1.31.1; fi
+    preconditions:
+      - sh: command -v actionlint || command -v docker
+        msg: "actionlint not found — install from https://github.com/rhysd/actionlint or install Docker"
+      - sh: command -v zizmor || command -v uvx
+        msg: "zizmor not found — install with: uv tool install zizmor (https://docs.zizmor.sh)"
+    cmds:
+      - '{{.ACTIONLINT}} -color'
+      - '{{.ZIZMOR}} .'
+
   check:
     desc: Type-check with and without the assembler feature, then check formatting
     preconditions: *cargo
