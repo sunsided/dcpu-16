@@ -16,7 +16,7 @@ mod instruction_word;
 mod register;
 
 #[cfg(feature = "assembler")]
-pub use crate::assembler::{assemble, AssembleError, AssembleErrorKind, Position};
+pub use crate::assembler::{AssembleError, AssembleErrorKind, Position, assemble};
 use crate::instruction::{Instruction, InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{
     InstructionArgument, InstructionArgumentDefinition, Location, SpecialRegister, StackOperation,
@@ -487,17 +487,17 @@ impl DCPU16 {
     fn dump_registers(&self) {
         debug!(
             "Registers: A={a:04X?} B={b:04X?} C={c:04X?} X={x:04X?} Y={y:04X?} Z={z:04X?} I={i:04X?} J={j:04X?} PC⁎={pc:04X?} SP={sp:04X?} O={o:04X?}",
-            a=self.registers[0],
-            b=self.registers[1],
-            c=self.registers[2],
-            x=self.registers[3],
-            y=self.registers[4],
-            z=self.registers[5],
-            i=self.registers[6],
-            j=self.registers[7],
-            pc=self.program_counter,
-            sp=self.stack_pointer,
-            o=self.overflow
+            a = self.registers[0],
+            b = self.registers[1],
+            c = self.registers[2],
+            x = self.registers[3],
+            y = self.registers[4],
+            z = self.registers[5],
+            i = self.registers[6],
+            j = self.registers[7],
+            pc = self.program_counter,
+            sp = self.stack_pointer,
+            o = self.overflow
         );
     }
 

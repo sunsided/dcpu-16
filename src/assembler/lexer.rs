@@ -92,7 +92,7 @@ pub(super) fn tokenize(source: &str) -> Result<Vec<Token<'_>>, AssembleError> {
                 return Err(AssembleError::new(
                     AssembleErrorKind::UnexpectedCharacter(c),
                     position,
-                ))
+                ));
             }
         };
 

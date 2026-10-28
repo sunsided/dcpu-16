@@ -3,7 +3,7 @@ name = "dcpu16-fuzz"
 version = "0.0.0"
 description = "Fuzz targets for the dcpu16 assembler"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [package.metadata]
 cargo-fuzz = true

@@ -1,7 +1,7 @@
 //! Expected outputs were captured from the previous pest-based assembler.
 #![cfg(feature = "assembler")]
 
-use dcpu16::{assemble, AssembleErrorKind, Position, DCPU16};
+use dcpu16::{AssembleErrorKind, DCPU16, Position, assemble};
 
 fn error(source: &str) -> (AssembleErrorKind, Position) {
     let error = assemble(source).unwrap_err();

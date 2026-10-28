@@ -3,7 +3,7 @@
 use crate::disassemble::Disassemble;
 use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition, Location};
 use crate::instruction_word::InstructionWord;
-use crate::{Word, DCPU16};
+use crate::{DCPU16, Word};
 use std::fmt::{Debug, Formatter};
 
 /// A decoded instruction with all extra operands.
