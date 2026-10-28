@@ -9,7 +9,7 @@ use tracing::warn;
 ///
 /// A non-zero word is printed as the Unicode character it encodes and then cleared
 /// to zero, which tells the program the console is ready for the next character.
-/// Words that are no valid character, such as surrogates, print as `U+FFFD`.
+/// Words that are not valid characters, such as surrogates, print as `U+FFFD`.
 pub struct Console<W> {
     /// Where characters are written to.
     writer: W,
