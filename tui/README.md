@@ -10,8 +10,10 @@ program, runs it at the 100 kHz of the original, and shows:
   changed light up.
 - **Hardware:** the screen, keyboard and console with activity lights, the keyboard
   ring buffer slot by slot, the measured clock speed, and the stack.
-- **Code:** the disassembled instructions from the program counter on, syntax
+- **Code:** the disassembled instructions around the program counter, syntax
   highlighted and with a plain-English comment, e.g. `SET [X], 0xF0DF ; store 0xF0DF in RAM[X]`.
+  A trail in the gutter marks recently executed instructions and fades over a second, so
+  code that runs only briefly, like the handling of a key, stays visible.
 
 The look is a phosphor ship console: amber chrome and green phosphor on near-black,
 which needs a terminal with 24-bit color.
@@ -28,7 +30,7 @@ cargo run -p dcpu16-tui -- tui/programs/typewriter.dasm
 | F5        | Pause or resume                                  |
 | F10       | Execute one instruction while paused             |
 | F2        | Reset and run the program from the start         |
-| F7 / F8   | Slower / faster, from 1 kHz to 10 MHz            |
+| F7 / F8   | Slower / faster, from 10 Hz to 10 MHz            |
 | Ctrl+C    | Quit                                             |
 
 Example programs are in [`programs`](programs): `hello.dasm` greets on the screen

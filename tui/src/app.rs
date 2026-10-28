@@ -1,9 +1,9 @@
 //! The emulator state behind the user interface and its reaction to keys.
 
-use dcpu16::DCPU16;
 use dcpu16::devices::{
     Console, KEYBOARD_BUFFER, KEYBOARD_BUFFER_LEN, Keyboard, KeyboardInput, VIDEO_RAM, screen,
 };
+use dcpu16::{DCPU16, NUM_RAM_WORDS};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::cell::Cell;
 use std::io::Write;
@@ -11,10 +11,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// Selectable emulation speeds in cycles per second; F7 and F8 move between them.
-pub const SPEEDS: [u64; 5] = [1_000, 10_000, 100_000, 1_000_000, 10_000_000];
+/// The slowest ones let you follow single instructions.
+pub const SPEEDS: [u64; 7] = [10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
 
 /// Index into [`SPEEDS`] of the 100 kHz the DCPU-16 runs at in 0x10c.
-const DEFAULT_SPEED: usize = 2;
+const DEFAULT_SPEED: usize = 4;
 
 /// Longest stretch of time emulated at once, so that a stalled terminal does not
 /// make the program race to catch up.
@@ -120,6 +121,11 @@ pub struct App {
     pub measured_hz: Option<f64>,
     /// Cycles executed and time passed since the clock speed was last measured.
     meter: (u64, Duration),
+    /// The number of frames drawn so far.
+    frame: u64,
+    /// For each address, one more than the frame in which an instruction there last
+    /// executed, or zero if none did.
+    trace: Vec<u64>,
     /// Set once the user asked to quit.
     pub quit: bool,
 }
@@ -135,6 +141,8 @@ impl App {
             activity: Activity::default(),
             measured_hz: None,
             meter: (0, Duration::ZERO),
+            frame: 0,
+            trace: vec![0; NUM_RAM_WORDS],
             program,
             cpu,
             keyboard,
@@ -155,6 +163,7 @@ impl App {
     ///
     /// Called once per frame, also while not running, so activity lights fade.
     pub fn advance(&mut self, elapsed: Duration) {
+        self.frame += 1;
         self.activity.decay();
         if self.state != State::Running {
             self.measured_hz = None;
@@ -168,7 +177,7 @@ impl App {
         let before = self.cpu.cycles();
         if self.budget >= 1.0 {
             let budget = self.budget as u64;
-            let running = self.execute(|cpu| cpu.run_for(budget));
+            let running = self.execute(|app| app.run_for(budget));
             self.budget -= (self.cpu.cycles() - before) as f64;
             if !running {
                 self.state = State::Halted;
@@ -183,10 +192,36 @@ impl App {
         }
     }
 
-    /// Runs `run` on the CPU and lights up the devices it used.
-    fn execute(&mut self, run: impl FnOnce(&mut DCPU16) -> bool) -> bool {
+    /// Gets the number of frames since an instruction at `address` last executed,
+    /// or `None` if none ever did.
+    pub fn frames_since_executed(&self, address: u16) -> Option<u64> {
+        match self.trace[usize::from(address)] {
+            0 => None,
+            frame => Some(self.frame + 1 - frame),
+        }
+    }
+
+    /// Like [`DCPU16::run_for`], but records every executed address in the trace.
+    fn run_for(&mut self, cycles: u64) -> bool {
+        let end = self.cpu.cycles().saturating_add(cycles);
+        while self.cpu.cycles() < end {
+            if !self.step() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Executes one instruction, or skips it, and records its address in the trace.
+    fn step(&mut self) -> bool {
+        self.trace[usize::from(self.cpu.program_counter)] = self.frame + 1;
+        self.cpu.step()
+    }
+
+    /// Runs `run` and lights up the devices it used.
+    fn execute(&mut self, run: impl FnOnce(&mut Self) -> bool) -> bool {
         let before = DeviceState::capture(&self.cpu, &self.output);
-        let running = run(&mut self.cpu);
+        let running = run(self);
         let after = DeviceState::capture(&self.cpu, &self.output);
 
         if before.video != after.video {
@@ -221,7 +256,7 @@ impl App {
             }
             KeyCode::F(10) if self.state == State::Paused => {
                 self.previous = registers(&self.cpu);
-                if !self.execute(DCPU16::step) {
+                if !self.execute(Self::step) {
                     self.state = State::Halted;
                 }
             }
@@ -249,6 +284,7 @@ impl App {
         self.activity = Activity::default();
         self.measured_hz = None;
         self.meter = (0, Duration::ZERO);
+        self.trace.fill(0);
     }
 }
 
@@ -553,6 +589,39 @@ mod tests {
         app.handle_key(press(KeyCode::F(5)));
         app.advance(Duration::from_millis(16));
         assert_eq!(app.measured_hz, None);
+    }
+
+    #[test]
+    fn traces_executed_instructions() {
+        let mut app = app("SET A, 1\n:loop ADD B, 1\nSET PC, loop");
+        assert_eq!(app.frames_since_executed(0), None);
+
+        app.advance(Duration::from_millis(16));
+        assert_eq!(app.frames_since_executed(0), Some(0));
+        assert_eq!(app.frames_since_executed(1), Some(0));
+        assert_eq!(app.frames_since_executed(2), Some(0));
+        assert_eq!(app.frames_since_executed(3), None);
+
+        // The loop keeps running; the first instruction ages.
+        for _ in 0..10 {
+            app.advance(Duration::from_millis(16));
+        }
+        assert_eq!(app.frames_since_executed(0), Some(10));
+        assert_eq!(app.frames_since_executed(1), Some(0));
+
+        app.handle_key(press(KeyCode::F(2)));
+        assert_eq!(app.frames_since_executed(1), None);
+    }
+
+    #[test]
+    fn slows_down_to_10_hz() {
+        let mut app = app(":loop ADD A, 1\nSET PC, loop");
+        for _ in 0..4 {
+            app.handle_key(press(KeyCode::F(7)));
+        }
+        assert_eq!(app.speed(), 10);
+        app.advance(Duration::from_millis(100));
+        assert_eq!(app.cpu.cycles(), 2);
     }
 
     #[test]

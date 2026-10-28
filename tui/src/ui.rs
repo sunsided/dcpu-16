@@ -326,6 +326,9 @@ fn key_span(key: u16) -> Span<'static> {
     Span::styled(symbol.to_string(), theme::bold(CYAN))
 }
 
+/// Frames over which the execution trail in the code panel fades, about a second.
+const TRAIL_FRAMES: u64 = 60;
+
 /// Lines the code panel keeps visible above the program counter when it scrolls.
 const CODE_CONTEXT: usize = 3;
 /// Lines the code panel keeps visible below the program counter before it scrolls.
@@ -357,7 +360,10 @@ fn draw_code(frame: &mut Frame, area: Rect, app: &App) {
 
     let lines: Vec<Line> = listing
         .into_iter()
-        .map(|(address, disassembly)| code_line(address, &disassembly, address == pc))
+        .map(|(address, disassembly)| {
+            let trail = app.frames_since_executed(address);
+            code_line(address, &disassembly, address == pc, trail)
+        })
         .collect();
     frame.render_widget(Paragraph::new(lines).block(panel("CODE")), area);
 }
@@ -375,12 +381,19 @@ fn code_listing(app: &App, top: u16, rows: usize) -> Vec<(u16, Disassembly)> {
         .collect()
 }
 
-/// Renders one instruction of the code panel; `current` marks the program counter.
-fn code_line(address: u16, disassembly: &Disassembly, current: bool) -> Line<'static> {
+/// Renders one instruction of the code panel; `current` marks the program counter,
+/// and `trail` is the number of frames since the instruction last executed.
+fn code_line(
+    address: u16,
+    disassembly: &Disassembly,
+    current: bool,
+    trail: Option<u64>,
+) -> Line<'static> {
     let mut spans = vec![
-        Span::styled(if current { "▶ " } else { "  " }, theme::bold(AMBER)),
+        Span::styled(if current { "▶" } else { " " }, theme::bold(AMBER)),
+        trail_span(trail),
         Span::styled(
-            format!("{address:04X}  "),
+            format!(" {address:04X}  "),
             theme::fg(if current { AMBER } else { DIM }),
         ),
     ];
@@ -397,6 +410,31 @@ fn code_line(address: u16, disassembly: &Disassembly, current: bool) -> Line<'st
         line.style(Style::new().bg(BG_CURSOR))
     } else {
         line
+    }
+}
+
+/// Renders the execution trail mark of an instruction: bright amber right after it
+/// executed, fading to the border color over [`TRAIL_FRAMES`] frames.
+fn trail_span(frames: Option<u64>) -> Span<'static> {
+    match frames {
+        Some(frames) if frames < TRAIL_FRAMES => {
+            let t = frames as f64 / TRAIL_FRAMES as f64;
+            Span::styled("▍", theme::fg(blend(AMBER, BORDER, t)))
+        }
+        Some(_) => Span::styled("▍", theme::fg(BORDER)),
+        None => Span::raw(" "),
+    }
+}
+
+/// Mixes two RGB colors: `t` = 0 gives `from`, `t` = 1 gives `to`.
+fn blend(from: Color, to: Color, t: f64) -> Color {
+    match (from, to) {
+        (Color::Rgb(r1, g1, b1), Color::Rgb(r2, g2, b2)) => {
+            let mix =
+                |a: u8, b: u8| (f64::from(a) + (f64::from(b) - f64::from(a)) * t).round() as u8;
+            Color::Rgb(mix(r1, r2), mix(g1, g2), mix(b1, b2))
+        }
+        _ => from,
     }
 }
 
@@ -524,9 +562,10 @@ mod tests {
         assert!(lines[16].starts_with("│o "), "{}", lines[16]);
         assert!(lines.iter().any(|line| line.contains("A  1234")));
         assert!(
-            lines.iter().any(
-                |line| line.contains("▶ 000B  SET PC, 0x0B") && line.contains("; jump to 0x0B")
-            ),
+            lines
+                .iter()
+                .any(|line| line.contains("▶▍ 000B  SET PC, 0x0B")
+                    && line.contains("; jump to 0x0B")),
             "{}",
             lines.join("\n")
         );
@@ -552,6 +591,17 @@ mod tests {
         );
         assert!(hardware.contains("CLOCK           stopped"), "{hardware}");
         assert!(hardware.contains("STACK           empty"), "{hardware}");
+    }
+
+    #[test]
+    fn fades_the_execution_trail() {
+        assert_eq!(trail_span(None).content, " ");
+        assert_eq!(trail_span(Some(0)).style.fg, Some(AMBER));
+        assert_eq!(trail_span(Some(TRAIL_FRAMES)).style.fg, Some(BORDER));
+
+        let halfway = trail_span(Some(TRAIL_FRAMES / 2)).style.fg;
+        assert_ne!(halfway, Some(AMBER));
+        assert_ne!(halfway, Some(BORDER));
     }
 
     #[test]
@@ -582,7 +632,7 @@ mod tests {
                     .skip(usize::from(SCREEN_PANEL_WIDTH) + 1)
                     .collect();
                 (
-                    code.chars().skip(2).take(4).collect(),
+                    code.chars().skip(3).take(4).collect(),
                     code.starts_with('▶'),
                 )
             })
