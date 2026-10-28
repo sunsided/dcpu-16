@@ -151,6 +151,9 @@ pub struct App {
     current: usize,
     /// Whether Ctrl+C quits; not in a browser, which has no way out.
     pub can_quit: bool,
+    /// A message for the user in the header, e.g. why a requested program is not
+    /// running; cleared when switching programs.
+    pub notice: Option<String>,
     /// The CPU with the keyboard and console attached.
     pub cpu: DCPU16,
     /// Types keys on the attached keyboard.
@@ -204,6 +207,7 @@ impl App {
             programs,
             current: 0,
             can_quit: true,
+            notice: None,
             previous: registers(&cpu),
             code_top: Cell::new(cpu.program_counter),
             activity: Activity::default(),
@@ -335,6 +339,7 @@ impl App {
             KeyCode::F(2) => self.reset(),
             KeyCode::F(3) if self.has_program_choice() => {
                 self.current = (self.current + 1) % self.programs.len();
+                self.notice = None;
                 self.reset();
             }
             KeyCode::F(7) => self.speed = self.speed.saturating_sub(1),

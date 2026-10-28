@@ -71,13 +71,19 @@ fn panel(title: &str) -> Block<'_> {
 /// Draws the title bar with the program name, the execution state and the speed.
 fn draw_header(frame: &mut Frame, area: Rect, app: &App, blink_on: bool) {
     let bar = Style::new().bg(BAR_BG);
-    let title = Line::from(vec![
+    let mut title = vec![
         Span::styled(" ▓▒░ ", theme::fg(AMBER)),
         Span::styled("DCPU-16", theme::bold(AMBER)),
         Span::styled(" ░▒▓  ", theme::fg(AMBER)),
         Span::styled(app.name(), theme::fg(FG)),
-    ]);
-    frame.render_widget(Paragraph::new(title).style(bar), area);
+    ];
+    if let Some(notice) = &app.notice {
+        title.push(Span::styled(
+            format!("  ⚠ {notice}"),
+            theme::bold(theme::RED),
+        ));
+    }
+    frame.render_widget(Paragraph::new(Line::from(title)).style(bar), area);
 
     let (label, color) = match app.state {
         State::Running => ("RUNNING", GREEN),
@@ -716,6 +722,18 @@ mod tests {
         let rows = code_rows(&render(&app));
         assert_eq!(rows[0].0, "0020");
         assert!(rows[0].1);
+    }
+
+    #[test]
+    fn shows_a_notice_in_the_header() {
+        let mut app = App::new(dcpu16::assemble("SET A, 1").unwrap(), "demo.dasm");
+        app.notice = Some("no demo program named `tetris`".into());
+        let lines = render(&app);
+        assert!(
+            lines[0].contains("demo.dasm  ⚠ no demo program named `tetris`"),
+            "{}",
+            lines[0]
+        );
     }
 
     #[test]

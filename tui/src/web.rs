@@ -1,8 +1,12 @@
 //! Browser entry point: Ratzilla renders the unchanged interface into a WebGL2
 //! canvas, keys come from listeners on the document, and the demo programs are
 //! built in, since a page cannot open files from a path.
+//!
+//! The page's query parameters choose what runs: `?program=hello` starts with a
+//! demo, and `?source=…` runs percent-encoded assembly source, named by `&name=…`.
 
-use crate::app::{App, Key, KeyCode, Program};
+use crate::app::{App, Key, KeyCode};
+use crate::programs;
 use crate::{blink_on, ui};
 use ratatui::Terminal;
 use ratatui::layout::Constraint;
@@ -13,15 +17,6 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use web_time::Instant;
-
-/// The demo programs, in the order F3 cycles through them.
-const PROGRAMS: [(&str, &str); 2] = [
-    (
-        "typewriter.dasm",
-        include_str!("../programs/typewriter.dasm"),
-    ),
-    ("hello.dasm", include_str!("../programs/hello.dasm")),
-];
 
 /// Largest interface size in cells; bigger windows get it centered with a margin.
 const MAX_COLS: u16 = 110;
@@ -43,14 +38,14 @@ const FONT_SIZE: f32 = 15.0;
 pub fn main() {
     console_error_panic_hook::set_once();
 
-    let programs = PROGRAMS
-        .iter()
-        .map(|(name, source)| Program {
-            name: (*name).to_string(),
-            words: dcpu16::assemble(source).expect("demo programs assemble"),
-        })
-        .collect();
-    let mut app = App::with_programs(programs);
+    let parameter = query_parameters();
+    let selection = programs::select(
+        parameter("program").as_deref(),
+        parameter("source").as_deref(),
+        parameter("name").as_deref(),
+    );
+    let mut app = App::with_programs(selection.programs);
+    app.notice = selection.notice;
     app.can_quit = false;
     let app = Rc::new(RefCell::new(app));
 
@@ -71,6 +66,18 @@ pub fn main() {
         );
         ui::draw(frame, area, &app, blink_on(now - start));
     });
+}
+
+/// Reads the page's query parameters, percent-decoded.
+///
+/// Note that `+` decodes to a space, so source containing `+` must encode it as
+/// `%2B`, as `encodeURIComponent` does.
+fn query_parameters() -> impl Fn(&str) -> Option<String> {
+    let search = web_sys::window()
+        .and_then(|window| window.location().search().ok())
+        .unwrap_or_default();
+    let parameters = web_sys::UrlSearchParams::new_with_str(&search).ok();
+    move |name| parameters.as_ref()?.get(name)
 }
 
 /// Creates the terminal drawing into a WebGL2 canvas.

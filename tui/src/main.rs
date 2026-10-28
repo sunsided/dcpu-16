@@ -12,6 +12,7 @@
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
+mod programs;
 mod theme;
 mod ui;
 #[cfg(target_arch = "wasm32")]
