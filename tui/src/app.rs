@@ -3,6 +3,7 @@
 use dcpu16::DCPU16;
 use dcpu16::devices::{Console, Keyboard, KeyboardInput};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use std::cell::Cell;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -54,6 +55,9 @@ pub struct App {
     budget: f64,
     /// The registers before the last frame or step, to highlight what changed.
     pub previous: Registers,
+    /// The address of the first instruction in the code panel. It stays put while
+    /// the program counter moves within the panel, so loops do not scroll.
+    pub code_top: Cell<u16>,
     /// Set once the user asked to quit.
     pub quit: bool,
 }
@@ -65,6 +69,7 @@ impl App {
         Self {
             name: name.into(),
             previous: registers(&cpu),
+            code_top: Cell::new(cpu.program_counter),
             program,
             cpu,
             keyboard,
@@ -140,6 +145,7 @@ impl App {
     fn reset(&mut self) {
         let (cpu, keyboard, output) = boot(&self.program);
         self.previous = registers(&cpu);
+        self.code_top.set(cpu.program_counter);
         self.cpu = cpu;
         self.keyboard = keyboard;
         self.output = output;

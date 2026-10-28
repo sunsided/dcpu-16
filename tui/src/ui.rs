@@ -2,6 +2,7 @@
 
 use crate::app::{App, State, registers};
 use crate::theme::{self, AMBER, BG, BG_CURSOR, BORDER, CYAN, DIM, FG, GREEN};
+use dcpu16::Disassembly;
 use dcpu16::devices::screen::{self, Cell, PALETTE};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -196,39 +197,78 @@ fn draw_registers(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(lines).block(panel("REGISTERS")), area);
 }
 
-/// Draws the instructions from the program counter on, with syntax highlighting
+/// Lines the code panel keeps visible above the program counter when it scrolls.
+const CODE_CONTEXT: usize = 3;
+/// Lines the code panel keeps visible below the program counter before it scrolls.
+const CODE_LOOKAHEAD: usize = 3;
+
+/// Draws the instructions around the program counter, with syntax highlighting
 /// and a plain-English description of each.
+///
+/// The listing stays in place while the program counter moves within it, so a loop
+/// only moves the caret. Once the program counter gets close to the bottom, the
+/// listing scrolls to keep a few instructions above it; when it jumps somewhere
+/// else, the listing starts at the program counter.
 fn draw_code(frame: &mut Frame, area: Rect, app: &App) {
-    let mut address = app.cpu.program_counter;
-    let mut lines = Vec::new();
-    for index in 0..area.height.saturating_sub(2) {
-        let disassembly = app.cpu.disassemble(address);
-        let current = index == 0;
+    let rows = usize::from(area.height.saturating_sub(2));
+    let pc = app.cpu.program_counter;
 
-        let mut spans = vec![
-            Span::styled(if current { "▶ " } else { "  " }, theme::bold(AMBER)),
-            Span::styled(
-                format!("{address:04X}  "),
-                theme::fg(if current { AMBER } else { DIM }),
-            ),
-        ];
-        spans.extend(highlight(&disassembly.text));
-        let padding = CODE_TEXT_WIDTH.saturating_sub(disassembly.text.chars().count());
-        spans.push(Span::raw(" ".repeat(padding + 1)));
-        spans.push(Span::styled(
-            format!("; {}", disassembly.description),
-            theme::fg(DIM).add_modifier(Modifier::ITALIC),
-        ));
-
-        let line = Line::from(spans);
-        lines.push(if current {
-            line.style(Style::new().bg(BG_CURSOR))
-        } else {
-            line
-        });
-        address = address.wrapping_add(disassembly.length);
+    let mut listing = code_listing(app, app.code_top.get(), rows);
+    let top = match listing.iter().position(|(address, _)| *address == pc) {
+        // Small panels cannot keep both margins; visible is good enough there.
+        Some(_) if rows <= CODE_CONTEXT + CODE_LOOKAHEAD => None,
+        Some(index) if index + CODE_LOOKAHEAD < rows => None,
+        Some(index) => Some(listing[index - CODE_CONTEXT].0),
+        None => Some(pc),
+    };
+    if let Some(top) = top {
+        app.code_top.set(top);
+        listing = code_listing(app, top, rows);
     }
+
+    let lines: Vec<Line> = listing
+        .into_iter()
+        .map(|(address, disassembly)| code_line(address, &disassembly, address == pc))
+        .collect();
     frame.render_widget(Paragraph::new(lines).block(panel("CODE")), area);
+}
+
+/// Disassembles `rows` consecutive instructions starting at `top`.
+fn code_listing(app: &App, top: u16, rows: usize) -> Vec<(u16, Disassembly)> {
+    let mut address = top;
+    (0..rows)
+        .map(|_| {
+            let disassembly = app.cpu.disassemble(address);
+            let line = (address, disassembly);
+            address = address.wrapping_add(line.1.length);
+            line
+        })
+        .collect()
+}
+
+/// Renders one instruction of the code panel; `current` marks the program counter.
+fn code_line(address: u16, disassembly: &Disassembly, current: bool) -> Line<'static> {
+    let mut spans = vec![
+        Span::styled(if current { "▶ " } else { "  " }, theme::bold(AMBER)),
+        Span::styled(
+            format!("{address:04X}  "),
+            theme::fg(if current { AMBER } else { DIM }),
+        ),
+    ];
+    spans.extend(highlight(&disassembly.text));
+    let padding = CODE_TEXT_WIDTH.saturating_sub(disassembly.text.chars().count());
+    spans.push(Span::raw(" ".repeat(padding + 1)));
+    spans.push(Span::styled(
+        format!("; {}", disassembly.description),
+        theme::fg(DIM).add_modifier(Modifier::ITALIC),
+    ));
+
+    let line = Line::from(spans);
+    if current {
+        line.style(Style::new().bg(BG_CURSOR))
+    } else {
+        line
+    }
 }
 
 /// Splits a disassembled instruction into colored tokens: the mnemonic, registers,
@@ -344,6 +384,74 @@ mod tests {
             lines.join("\n")
         );
         assert!(lines[23].contains(" F5  run/pause"), "{}", lines[23]);
+    }
+
+    /// Gets the address and whether it is marked as current for each code line.
+    fn code_rows(lines: &[String]) -> Vec<(String, bool)> {
+        // The code panel starts below the registers panel, inside its border.
+        lines[11..22]
+            .iter()
+            .map(|line| {
+                // The code starts right of the screen panel and the code panel's border.
+                let code: String = line
+                    .chars()
+                    .skip(usize::from(SCREEN_PANEL_WIDTH) + 1)
+                    .collect();
+                (
+                    code.chars().skip(2).take(4).collect(),
+                    code.starts_with('▶'),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn code_panel_stays_put_while_looping() {
+        let program = dcpu16::assemble(
+            "SET A, 0\n:loop ADD A, 1\nIFN A, 0x30\nSET PC, loop\n:end SET PC, end",
+        )
+        .unwrap();
+        let mut app = App::new(program, "loop.dasm");
+        app.state = State::Paused;
+
+        for step in 0..12 {
+            let rows = code_rows(&render(&app));
+            assert_eq!(rows[0].0, "0000", "step {step} scrolled: {rows:?}");
+            let current: Vec<_> = rows.iter().filter(|(_, current)| *current).collect();
+            assert_eq!(current.len(), 1, "step {step}: {rows:?}");
+            assert_eq!(
+                current[0].0,
+                format!("{:04X}", app.cpu.program_counter),
+                "step {step}"
+            );
+            app.cpu.step();
+        }
+    }
+
+    #[test]
+    fn code_panel_scrolls_near_the_bottom_and_follows_jumps() {
+        let program = dcpu16::assemble(&"ADD A, 1\n".repeat(40)).unwrap();
+        let mut app = App::new(program, "straight.dasm");
+        app.state = State::Paused;
+
+        // 11 rows: the caret may move down to row 8, keeping 3 rows below it.
+        for _ in 0..7 {
+            app.cpu.step();
+        }
+        let rows = code_rows(&render(&app));
+        assert_eq!(rows[0].0, "0000");
+        assert!(rows[7].1);
+
+        app.cpu.step();
+        let rows = code_rows(&render(&app));
+        assert_eq!(rows[0].0, "0005", "{rows:?}");
+        assert!(rows[3].1);
+
+        // A jump out of the listing starts it at the program counter.
+        app.cpu.program_counter = 0x20;
+        let rows = code_rows(&render(&app));
+        assert_eq!(rows[0].0, "0020");
+        assert!(rows[0].1);
     }
 
     #[test]
