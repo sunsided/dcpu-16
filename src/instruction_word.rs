@@ -244,6 +244,24 @@ impl InstructionWord {
         1 + len_from_values
     }
 
+    /// Gets the number of cycles the instruction takes, including one per operand
+    /// that reads an extra word, but not the extra cycle of a failed test.
+    pub fn cycles(&self) -> u64 {
+        let base = match self {
+            Self::NonBasic(NonBasicInstruction::Reserved) => 0,
+            Self::NonBasic(NonBasicInstruction::Jsr { .. }) => 2,
+            Self::Set { .. } | Self::And { .. } | Self::Bor { .. } | Self::Xor { .. } => 1,
+            Self::Add { .. }
+            | Self::Sub { .. }
+            | Self::Mul { .. }
+            | Self::Shr { .. }
+            | Self::Shl { .. } => 2,
+            Self::Div { .. } | Self::Mod { .. } => 3,
+            Self::Ife { .. } | Self::Ifn { .. } | Self::Ifg { .. } | Self::Ifb { .. } => 2,
+        };
+        base + (self.length_in_words() - 1) as u64
+    }
+
     /// Unpacks the instruction arguments into a first value and an optional second value.
     pub fn unpack(
         &self,

@@ -281,6 +281,49 @@ copies a zero-terminated string to `0x8000`, where video memory starts by DCPU-1
 :message      DAT "Hello, world!", 0
 ```
 
+## Devices
+
+The DCPU-16 1.1 specification defines no I/O, so the [`devices`](src/devices.rs) module follows
+the memory-mapped conventions that grew around it. Devices are attached to the CPU and get access
+to RAM after every instruction:
+
+| Address           | Device                                                                    |
+|-------------------|---------------------------------------------------------------------------|
+| `0x8000`–`0x817f` | `screen`: 32×12 cells of `ffff bbbb B ccccccc` (colors, blink, character) |
+| `0x9000`–`0x900f` | `Keyboard`: ring buffer; a non-zero word is a key, clear it to take it    |
+| `0x9010`          | `Console`: write a character to print it; the word is cleared when done   |
+
+```rust
+use dcpu16::devices::{Console, Keyboard};
+use dcpu16::{assemble, DCPU16};
+
+let program = assemble(r#"
+              SET I, 0
+:loop         SET A, [message+I]
+              IFE A, 0
+                 SET PC, end
+              SET [0x9010], A
+              ADD I, 1
+              SET PC, loop
+:end          SET PC, end
+:message      DAT "Hello, world!", 0
+"#).unwrap();
+
+let (keyboard, input) = Keyboard::new();
+let mut cpu = DCPU16::new(&program);
+cpu.attach(keyboard);
+cpu.attach(Console::new(std::io::stdout()));
+
+input.press(u16::from(b'x')); // e.g. from an input thread
+while cpu.run_for(1000) {
+    std::thread::sleep(std::time::Duration::from_millis(10)); // 100 kHz
+}
+```
+
+The screen needs no ticking; frontends read it with `screen::cells` or `screen::text`.
+`DCPU16::cycles` counts cycles as the specification defines them, which `run_for` uses to pace
+execution. Try it interactively with `task run:echo`, which echoes typed lines in upper case.
+
 ## Fuzzing
 
 There are three [cargo-fuzz] targets in [fuzz/](fuzz/):

@@ -19,6 +19,11 @@ path = "examples/sample.rs"
 name = "assemble"
 path = "examples/assemble.rs"
 
+[[example]]
+name = "echo"
+path = "examples/echo.rs"
+required-features = ["assembler"]
+
 [features]
 default = [ "assembler" ]
 assembler = []
