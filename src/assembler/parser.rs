@@ -1,10 +1,12 @@
 //! Turns assembler [`Token`]s into [`MetaInstruction`]s, one source line at a time.
 
 use super::error::{AssembleError, AssembleErrorKind, Position};
-use super::lexer::{Token, TokenKind, tokenize};
-use super::{BasicOperationName, Instruction, MetaInstruction, NonBasicOperationName, Value};
-use crate::Register;
+use super::lexer::{Token, TokenKind, string_words, tokenize};
+use super::{
+    BasicOperationName, DataWord, Instruction, MetaInstruction, NonBasicOperationName, Operand,
+};
 use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
+use crate::{Register, Word};
 use std::collections::HashSet;
 
 /// Parses the source and generates a stream of [`MetaInstruction`] instances.
@@ -77,13 +79,6 @@ impl<'t, 'a> LineParser<'t, 'a> {
         self.tokens.get(self.index)
     }
 
-    /// Consumes and returns the next token.
-    fn next(&mut self) -> Option<Token<'a>> {
-        let token = self.tokens.get(self.index).copied();
-        self.index += 1;
-        token
-    }
-
     /// Builds an error describing the current token (or the end of the line).
     fn expected(&self, expected: &'static str) -> AssembleError {
         let (found, position) = match self.peek() {
@@ -146,24 +141,28 @@ impl<'t, 'a> LineParser<'t, 'a> {
         };
         self.index += 1;
 
+        if mnemonic == "DAT" {
+            return Ok(Some(Instruction::Data(self.data()?)));
+        }
+
         if let Some(operation) = basic_operation(mnemonic) {
             let a_position = self.peek().map_or(position, |t| t.position);
             let a = match self.operand()? {
-                Value::Static(argument) => argument,
-                Value::LabelReference(name) => {
+                Operand::Label(name) => {
                     return Err(AssembleError::new(
                         AssembleErrorKind::LabelNotAllowed(name),
                         a_position,
                     ));
                 }
+                a => a,
             };
             self.expect(TokenKind::Comma, "`,`")?;
-            let b = self.operand_or_label_reference()?;
+            let b = self.operand()?;
             return Ok(Some(Instruction::Basic(operation, a, b)));
         }
 
         if let Some(operation) = nonbasic_operation(mnemonic) {
-            let a = self.operand_or_label_reference()?;
+            let a = self.operand()?;
             return Ok(Some(Instruction::NonBasic(operation, a)));
         }
 
@@ -173,20 +172,48 @@ impl<'t, 'a> LineParser<'t, 'a> {
         ))
     }
 
-    /// Parses an operand that may be a label reference, recording the reference for validation.
-    fn operand_or_label_reference(&mut self) -> Result<Value, AssembleError> {
-        let value = self.operand()?;
-        if let Value::LabelReference(_) = value {
-            let token = self.tokens[self.index - 1];
-            if let TokenKind::Ident(name) = token.kind {
-                self.label_references.push((name, token.position));
+    /// Parses the comma-separated numbers, strings and label references of a `DAT` directive.
+    fn data(&mut self) -> Result<Vec<DataWord>, AssembleError> {
+        let mut words = Vec::new();
+        loop {
+            match self.peek().map(|t| t.kind) {
+                Some(TokenKind::Number(word)) => {
+                    self.index += 1;
+                    words.push(DataWord::Literal(word));
+                }
+                Some(TokenKind::Str(contents)) => {
+                    self.index += 1;
+                    words.extend(string_words(contents).map(DataWord::Literal));
+                }
+                Some(TokenKind::Ident(name)) if named_argument(name).is_none() => {
+                    words.push(DataWord::Label(self.label_reference()));
+                }
+                _ => return Err(self.expected("a number, string or label")),
             }
+
+            if self.peek().map(|t| t.kind) != Some(TokenKind::Comma) {
+                return Ok(words);
+            }
+            self.index += 1;
         }
-        Ok(value)
     }
 
-    /// Parses an operand. Unknown names are returned as label references.
-    fn operand(&mut self) -> Result<Value, AssembleError> {
+    /// Consumes a label reference, recording it for validation, and returns its name.
+    ///
+    /// The next token must be an identifier.
+    fn label_reference(&mut self) -> String {
+        let token = self.tokens[self.index];
+        self.index += 1;
+        let TokenKind::Ident(name) = token.kind else {
+            unreachable!("label reference without an identifier");
+        };
+        self.label_references.push((name, token.position));
+        name.to_string()
+    }
+
+    /// Parses an operand. Names other than registers, special registers and stack
+    /// operations are label references.
+    fn operand(&mut self) -> Result<Operand, AssembleError> {
         let token = match self.peek() {
             Some(&token) => token,
             None => return Err(self.expected("an operand")),
@@ -197,48 +224,92 @@ impl<'t, 'a> LineParser<'t, 'a> {
                 self.index += 1;
                 InstructionArgument::Literal(word)
             }
-            TokenKind::Ident(name) => {
-                self.index += 1;
-                match named_argument(name) {
-                    Some(argument) => argument,
-                    None => return Ok(Value::LabelReference(name.to_string())),
+            TokenKind::Ident(name) => match named_argument(name) {
+                Some(argument) => {
+                    self.index += 1;
+                    argument
                 }
-            }
+                None => return Ok(Operand::Label(self.label_reference())),
+            },
             TokenKind::OpenBracket => {
                 self.index += 1;
-                self.address()?
+                return self.address();
             }
             _ => return Err(self.expected("an operand")),
         };
-        Ok(Value::Static(argument))
+        Ok(Operand::Static(argument))
     }
 
-    /// Parses `[literal]`, `[register]` or `[literal+register]` after the opening bracket.
-    fn address(&mut self) -> Result<InstructionArgument, AssembleError> {
-        let argument = match self.next().map(|t| t.kind) {
-            Some(TokenKind::Number(address)) => {
+    /// Parses the address after the opening bracket: a literal, register or label,
+    /// or a register added to a literal or label in either order.
+    fn address(&mut self) -> Result<Operand, AssembleError> {
+        let operand = match self.address_term()? {
+            AddressTerm::Literal(address) => match self.offset_register()? {
+                Some(register) => {
+                    Operand::Static(InstructionArgument::AddressOffset { address, register })
+                }
+                None => Operand::Static(InstructionArgument::Address(address)),
+            },
+            AddressTerm::Label(label) => Operand::LabelAddress {
+                label,
+                register: self.offset_register()?,
+            },
+            AddressTerm::Register(register) => {
                 if self.peek().map(|t| t.kind) == Some(TokenKind::Plus) {
                     self.index += 1;
-                    let register = self.register()?;
-                    InstructionArgument::AddressOffset { address, register }
+                    match self.address_term()? {
+                        AddressTerm::Literal(address) => {
+                            Operand::Static(InstructionArgument::AddressOffset {
+                                address,
+                                register,
+                            })
+                        }
+                        AddressTerm::Label(label) => Operand::LabelAddress {
+                            label,
+                            register: Some(register),
+                        },
+                        AddressTerm::Register(_) => {
+                            self.index -= 1;
+                            return Err(self.expected("a literal or label"));
+                        }
+                    }
                 } else {
-                    InstructionArgument::Address(address)
+                    Operand::Static(InstructionArgument::AddressFromRegister(register))
                 }
-            }
-            Some(TokenKind::Ident(name)) => match register(name) {
-                Some(register) => InstructionArgument::AddressFromRegister(register),
-                None => {
-                    self.index -= 1;
-                    return Err(self.expected("a literal or register"));
-                }
-            },
-            _ => {
-                self.index -= 1;
-                return Err(self.expected("a literal or register"));
             }
         };
         self.expect(TokenKind::CloseBracket, "`]`")?;
-        Ok(argument)
+        Ok(operand)
+    }
+
+    /// Parses a literal, general-purpose register or label reference inside brackets.
+    fn address_term(&mut self) -> Result<AddressTerm, AssembleError> {
+        match self.peek().map(|t| t.kind) {
+            Some(TokenKind::Number(address)) => {
+                self.index += 1;
+                Ok(AddressTerm::Literal(address))
+            }
+            Some(TokenKind::Ident(name)) => {
+                if let Some(register) = register(name) {
+                    self.index += 1;
+                    Ok(AddressTerm::Register(register))
+                } else if named_argument(name).is_none() {
+                    Ok(AddressTerm::Label(self.label_reference()))
+                } else {
+                    Err(self.expected("a literal, register or label"))
+                }
+            }
+            _ => Err(self.expected("a literal, register or label")),
+        }
+    }
+
+    /// Consumes `+register` after a literal or label, if present.
+    fn offset_register(&mut self) -> Result<Option<Register>, AssembleError> {
+        if self.peek().map(|t| t.kind) != Some(TokenKind::Plus) {
+            return Ok(None);
+        }
+        self.index += 1;
+        self.register().map(Some)
     }
 
     /// Consumes a general-purpose register name.
@@ -262,6 +333,16 @@ impl<'t, 'a> LineParser<'t, 'a> {
             Some(_) => Err(self.expected("end of line")),
         }
     }
+}
+
+/// One side of an address expression inside brackets.
+enum AddressTerm {
+    /// A numeric address or offset.
+    Literal(Word),
+    /// A general-purpose register.
+    Register(Register),
+    /// A label reference, already recorded for validation.
+    Label(String),
 }
 
 /// Resolves the mnemonic of a basic (two-operand) instruction.

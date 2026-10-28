@@ -229,23 +229,56 @@ in the original code but represented using `d9c1` in this output:
 This is the tracing output of the assembler:
 
 ```
-TRACE dcpu16::assembler: instruction Basic(Set, Register(A), Static(Literal(48))), len = 2
-TRACE dcpu16::assembler: instruction Basic(Set, Address(4096), Static(Literal(32))), len = 3
-TRACE dcpu16::assembler: instruction Basic(Sub, Register(A), Static(Address(4096))), len = 2
-TRACE dcpu16::assembler: instruction Basic(Ifn, Register(A), Static(Literal(16))), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, Register(I), Static(Literal(10))), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, Register(A), Static(Literal(8192))), len = 2
-TRACE dcpu16::assembler: instruction Basic(Set, AddressOffset { address: 8192, register: I }, Static(AddressFromRegister(A))), len = 2
-TRACE dcpu16::assembler: instruction Basic(Sub, Register(I), Static(Literal(1))), len = 1
-TRACE dcpu16::assembler: instruction Basic(Ifn, Register(I), Static(Literal(0))), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("loop")), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, Register(X), Static(Literal(4))), len = 1
-TRACE dcpu16::assembler: instruction NonBasic(Jsr, LabelReference("testsub")), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
-TRACE dcpu16::assembler: instruction Basic(Shl, Register(X), Static(Literal(4))), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), Static(StackOperation(Pop))), len = 1
-TRACE dcpu16::assembler: instruction Basic(Set, SpecialRegister(ProgramCounter), LabelReference("crash")), len = 1
+TRACE dcpu16::assembler: 0000: Basic(Set, Static(Register(A)), Static(Literal(48))) => [7C01, 0030]
+TRACE dcpu16::assembler: 0002: Basic(Set, Static(Address(4096)), Static(Literal(32))) => [7DE1, 1000, 0020]
+TRACE dcpu16::assembler: 0005: Basic(Sub, Static(Register(A)), Static(Address(4096))) => [7803, 1000]
+TRACE dcpu16::assembler: 0007: Basic(Ifn, Static(Register(A)), Static(Literal(16))) => [C00D]
+TRACE dcpu16::assembler: 0008: Basic(Set, Static(SpecialRegister(ProgramCounter)), Label("crash")) => [D9C1]
+TRACE dcpu16::assembler: 0009: Basic(Set, Static(Register(I)), Static(Literal(10))) => [A861]
+TRACE dcpu16::assembler: 000A: Basic(Set, Static(Register(A)), Static(Literal(8192))) => [7C01, 2000]
+TRACE dcpu16::assembler: 000C: Basic(Set, Static(AddressOffset { address: 8192, register: I }), Static(AddressFromRegister(A))) => [2161, 2000]
+TRACE dcpu16::assembler: 000E: Basic(Sub, Static(Register(I)), Static(Literal(1))) => [8463]
+TRACE dcpu16::assembler: 000F: Basic(Ifn, Static(Register(I)), Static(Literal(0))) => [806D]
+TRACE dcpu16::assembler: 0010: Basic(Set, Static(SpecialRegister(ProgramCounter)), Label("loop")) => [B1C1]
+TRACE dcpu16::assembler: 0011: Basic(Set, Static(Register(X)), Static(Literal(4))) => [9031]
+TRACE dcpu16::assembler: 0012: NonBasic(Jsr, Label("testsub")) => [D010]
+TRACE dcpu16::assembler: 0013: Basic(Set, Static(SpecialRegister(ProgramCounter)), Label("crash")) => [D9C1]
+TRACE dcpu16::assembler: 0014: Basic(Shl, Static(Register(X)), Static(Literal(4))) => [9037]
+TRACE dcpu16::assembler: 0015: Basic(Set, Static(SpecialRegister(ProgramCounter)), Static(StackOperation(Pop))) => [61C1]
+TRACE dcpu16::assembler: 0016: Basic(Set, Static(SpecialRegister(ProgramCounter)), Label("crash")) => [D9C1]
+TRACE dcpu16::assembler: assembled 23 words in 2 passes
+```
+
+### Assembler syntax
+
+Each line holds an optional label definition, an optional instruction and an optional `;` comment.
+Mnemonics, registers and special names (`SP`, `PC`, `O`, `PUSH`, `PEEK`, `POP`) are upper case;
+label names are case-sensitive.
+
+| Form                                 | Meaning                                                            |
+|--------------------------------------|--------------------------------------------------------------------|
+| `:name`                              | Defines a label at the current address                             |
+| `42`, `0x2a`                         | A literal                                                          |
+| `name`                               | A label's address as a literal; not allowed as the first operand  |
+| `[0x1000]`, `[name]`                 | The word at an address                                             |
+| `[A]`                                | The word at the address in a register                              |
+| `[0x10+A]`, `[A+0x10]`, `[name+I]`   | The word at an address plus a register                             |
+| `DAT 1, 0x20, name, "text"`          | Raw words; strings contribute one word per character               |
+
+String literals support the escapes `\"`, `\\`, `\n`, `\r`, `\t` and `\0`. For example, this
+copies a zero-terminated string to `0x8000`, where video memory starts by DCPU-16 1.1 convention:
+
+```dasm
+              SET I, 0
+:loop         SET A, [message+I]
+              IFE A, 0
+                 SET PC, end
+              SET [0x8000+I], A
+              ADD I, 1
+              SET PC, loop
+:end          SET PC, end
+
+:message      DAT "Hello, world!", 0
 ```
 
 ## Fuzzing

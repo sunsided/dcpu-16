@@ -38,6 +38,12 @@ pub enum AssembleErrorKind {
     InvalidNumber(String),
     /// A numeric literal that does not fit into a 16-bit word.
     NumberOutOfRange(String),
+    /// A string literal without its closing `"` on the same line.
+    UnterminatedString,
+    /// An unknown escape sequence in a string literal, given by the character after the `\`.
+    InvalidEscape(char),
+    /// A character in a string literal that does not fit into a 16-bit word.
+    CharacterOutOfRange(char),
     /// An unknown instruction mnemonic.
     UnknownInstruction(String),
     /// A token other than the expected one.
@@ -51,7 +57,8 @@ pub enum AssembleErrorKind {
     DuplicateLabel(String),
     /// A reference to a label that is never defined.
     UndefinedLabel(String),
-    /// A label reference in an operand position that does not accept one.
+    /// A bare label reference as the first operand of a basic instruction,
+    /// which would assign to a literal.
     LabelNotAllowed(String),
     /// The assembled program would be longer than the emulator accepts.
     ProgramTooLarge {
@@ -92,6 +99,11 @@ impl Display for AssembleErrorKind {
             Self::NumberOutOfRange(text) => {
                 write!(f, "number `{}` does not fit into a 16-bit word", text)
             }
+            Self::UnterminatedString => write!(f, "string literal is missing its closing `\"`"),
+            Self::InvalidEscape(c) => write!(f, "unknown escape sequence `\\{}`", c),
+            Self::CharacterOutOfRange(c) => {
+                write!(f, "character {:?} does not fit into a 16-bit word", c)
+            }
             Self::UnknownInstruction(name) => write!(f, "unknown instruction `{}`", name),
             Self::Expected { expected, found } => {
                 write!(f, "expected {}, found {}", expected, found)
@@ -105,8 +117,8 @@ impl Display for AssembleErrorKind {
             ),
             Self::LabelNotAllowed(name) => write!(
                 f,
-                "label reference `{}` is only allowed as the last operand",
-                name
+                "label `{}` cannot be assigned to; use `[{}]` to write to its address",
+                name, name
             ),
         }
     }
