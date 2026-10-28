@@ -324,6 +324,16 @@ The screen needs no ticking; frontends read it with `screen::cells` or `screen::
 `DCPU16::cycles` counts cycles as the specification defines them, which `run_for` uses to pace
 execution. Try it interactively with `task run:echo`, which echoes typed lines in upper case.
 
+## Terminal UI
+
+The [`dcpu16-tui`](tui) crate in this repository runs programs in the terminal. It shows the
+screen, the console output, the registers and the code around the program counter, and sends
+typed keys to the program:
+
+```console
+task run:tui PROGRAM=tui/programs/typewriter.dasm
+```
+
 ## Fuzzing
 
 There are three [cargo-fuzz] targets in [fuzz/](fuzz/):

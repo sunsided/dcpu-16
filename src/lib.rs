@@ -20,6 +20,7 @@ mod register;
 #[cfg(feature = "assembler")]
 pub use crate::assembler::{AssembleError, AssembleErrorKind, Position, assemble};
 use crate::devices::Device;
+use crate::disassemble::Disassemble;
 use crate::instruction::{Instruction, InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{
     InstructionArgument, InstructionArgumentDefinition, Location, SpecialRegister, StackOperation,
@@ -48,6 +49,17 @@ const STACK_POINTER_INIT: Word = 0;
 trait Decode {
     /// Decodes the specified word.
     fn decode(value: Word) -> Self;
+}
+
+/// An instruction rendered as assembly by [`DCPU16::disassemble`].
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Disassembly {
+    /// The instruction in assembly syntax, e.g. `SET [0x1000], 0x20`.
+    pub text: String,
+    /// What the instruction does in plain English, e.g. `store 0x20 in RAM[0x1000]`.
+    pub description: String,
+    /// The number of words the instruction occupies, from one to three.
+    pub length: u16,
 }
 
 /// A DCPU-16 emulator.
@@ -134,6 +146,29 @@ impl DCPU16 {
     /// Attaches a device, which is ticked after every executed instruction from now on.
     pub fn attach(&mut self, device: impl Device + Send + 'static) {
         self.devices.push(Box::new(device));
+    }
+
+    /// Disassembles the instruction stored at `address` without executing it.
+    ///
+    /// Reserved opcodes render as `DAT` with the raw word.
+    pub fn disassemble(&self, address: u16) -> Disassembly {
+        let instruction = self.instruction_at(address);
+        let (raw_instruction, instruction_word, _, _) = instruction.unpack();
+        let (text, description) =
+            if instruction_word == InstructionWord::NonBasic(NonBasicInstruction::Reserved) {
+                (
+                    format!("DAT 0x{raw_instruction:04X}"),
+                    String::from("reserved opcode"),
+                )
+            } else {
+                let instruction = InstructionWithOperands::inspect(self, instruction);
+                (instruction.disassemble(), instruction.describe())
+            };
+        Disassembly {
+            text,
+            description,
+            length: instruction_word.length_in_words() as u16,
+        }
     }
 
     /// Executes the program until it ends, hits a reserved opcode or a crash loop is detected.
@@ -392,9 +427,20 @@ impl DCPU16 {
     /// Reads the instruction at the program counter, including its extra operand words,
     /// and advances the program counter past it. Operands are not resolved yet.
     fn read_instruction(&mut self) -> Instruction {
-        let raw_instruction = self.read_word_and_advance_pc();
+        let instruction = self.instruction_at(self.program_counter);
+        let (_, instruction_word, _, _) = instruction.unpack();
+        self.program_counter = self
+            .program_counter
+            .wrapping_add(instruction_word.length_in_words() as Word);
+        instruction
+    }
+
+    /// Reads the instruction at `address`, including its extra operand words,
+    /// which wrap around at the end of RAM.
+    fn instruction_at(&self, address: Word) -> Instruction {
+        let word = |offset: Word| self.ram[usize::from(address.wrapping_add(offset))];
+        let raw_instruction = word(0);
         let instruction_word = InstructionWord::decode(raw_instruction);
-        assert!(instruction_word.length_in_words() >= 1);
 
         match instruction_word.length_in_words() {
             1 => Instruction::OneWord {
@@ -404,23 +450,16 @@ impl DCPU16 {
             2 => Instruction::TwoWord {
                 raw_instruction,
                 instruction: instruction_word,
-                raw_1st: self.read_word_and_advance_pc(),
+                raw_1st: word(1),
             },
             3 => Instruction::ThreeWord {
                 raw_instruction,
                 instruction: instruction_word,
-                raw_1st: self.read_word_and_advance_pc(),
-                raw_2nd: self.read_word_and_advance_pc(),
+                raw_1st: word(1),
+                raw_2nd: word(2),
             },
-            _ => unreachable!(),
+            _ => unreachable!("instructions are one to three words long"),
         }
-    }
-
-    /// Reads the word at the program counter from RAM and advances the program counter.
-    fn read_word_and_advance_pc(&mut self) -> u16 {
-        let value = self.ram[self.program_counter as usize];
-        self.program_counter = self.program_counter.wrapping_add(1);
-        value
     }
 
     /// Decodes an operand, resolves it to its [`Location`] and reads the value there.

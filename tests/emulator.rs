@@ -305,3 +305,61 @@ fn run_for_reports_when_execution_stops() {
     assert!(!cpu.run_for(100));
     assert_eq!(cpu.cycles(), 2);
 }
+
+#[test]
+fn disassembles_without_executing() {
+    let mut program = assemble("SET [0x1000], 0x20\nSET PUSH, [A]\nJSR 0x10").unwrap();
+    program.push(0x0000);
+    let cpu = DCPU16::new(&program);
+
+    let mut address = 0;
+    let mut lines = Vec::new();
+    while usize::from(address) < program.len() {
+        let disassembly = cpu.disassemble(address);
+        lines.push(disassembly.text);
+        address += disassembly.length;
+    }
+    assert_eq!(
+        lines,
+        [
+            "SET [0x1000], 0x20",
+            "SET PUSH, [A]",
+            "JSR 0x10",
+            "DAT 0x0000"
+        ]
+    );
+    assert_eq!(cpu.program_counter, 0);
+    assert_eq!(cpu.stack_pointer, 0);
+}
+
+#[test]
+fn describes_instructions_in_plain_english() {
+    let source = "SET [X], 0xf0df\nSET A, [0x10+I]\nSET PUSH, A\nSET B, POP\nSET PC, 0x40\n\
+        SET PC, POP\nADD PEEK, 1\nIFE A, 0x10\nIFB A, 1\nJSR 0x18\nMOD A, B";
+    let program = assemble(source).unwrap();
+    let cpu = DCPU16::new(&program);
+
+    let mut address = 0;
+    let mut descriptions = Vec::new();
+    while usize::from(address) < program.len() {
+        let disassembly = cpu.disassemble(address);
+        descriptions.push(disassembly.description);
+        address += disassembly.length;
+    }
+    assert_eq!(
+        descriptions,
+        [
+            "store 0xF0DF in RAM[X]",
+            "store RAM[0x10+I] in A",
+            "push A",
+            "pop into B",
+            "jump to 0x40",
+            "return from subroutine",
+            "add 0x01 to RAM[SP]",
+            "run next if A == 0x10",
+            "run next if A & 0x01 != 0",
+            "call subroutine at 0x18",
+            "set A to A modulo B",
+        ]
+    );
+}

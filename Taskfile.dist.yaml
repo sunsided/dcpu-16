@@ -37,14 +37,14 @@ tasks:
     desc: Run clippy on all targets and features (warnings as errors)
     preconditions: *cargo
     cmds:
-      - cargo clippy --all-targets --all-features -- -D warnings
+      - cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   lint:fix:
     desc: Auto-fix clippy lints, then format
     aliases: [fix]
     preconditions: *cargo
     cmds:
-      - cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
+      - cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
       - task: fmt
 
   lint:actions:
@@ -69,7 +69,7 @@ tasks:
     desc: Type-check with and without the assembler feature, then check formatting
     preconditions: *cargo
     cmds:
-      - cargo check --all-targets
+      - cargo check --workspace --all-targets
       - cargo check --lib --no-default-features
       - task: fmt:check
 
@@ -77,20 +77,20 @@ tasks:
     desc: Build library and examples (debug), then check the fuzz targets still compile
     preconditions: *cargo
     cmds:
-      - cargo build --all-targets
+      - cargo build --workspace --all-targets
       - task: fuzz:build
 
   build:release:
     desc: Build library and examples (release)
     preconditions: *cargo
     cmds:
-      - cargo build --all-targets --release
+      - cargo build --workspace --all-targets --release
 
   test:
     desc: Run the test suite, including doctests (extra args after --)
     preconditions: *cargo
     cmds:
-      - cargo test --all-features {{.CLI_ARGS}}
+      - cargo test --workspace --all-features {{.CLI_ARGS}}
 
   test:no-default-features:
     desc: Run tests without the optional assembler feature
@@ -121,6 +121,14 @@ tasks:
     cmds:
       - cargo run --example echo
 
+  run:tui:
+    desc: Run a program in the terminal UI (PROGRAM=path to a .dasm file)
+    preconditions: *cargo
+    vars:
+      PROGRAM: '{{.PROGRAM | default "tui/programs/typewriter.dasm"}}'
+    cmds:
+      - cargo run -p dcpu16-tui -- {{.PROGRAM}}
+
   fuzz:
     desc: Fuzz one target until stopped (TARGET=assemble|assemble_valid|execute, libFuzzer flags after --)
     cmds:
@@ -133,13 +141,13 @@ tasks:
     desc: Build rustdoc
     preconditions: *cargo
     cmds:
-      - cargo doc --no-deps --all-features
+      - cargo doc --workspace --no-deps --all-features
 
   docs:open:
     desc: Build rustdoc and open it in the browser
     preconditions: *cargo
     cmds:
-      - cargo doc --no-deps --all-features --open
+      - cargo doc --workspace --no-deps --all-features --open
 
   clean:
     desc: Remove build artifacts

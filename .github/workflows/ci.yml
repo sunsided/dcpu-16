@@ -41,23 +41,37 @@ jobs:
       - run: task ci
 
   msrv:
-    name: Minimum supported Rust version
+    name: Minimum supported Rust version (${{ matrix.package }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: dcpu16
+            manifest: Cargo.toml
+          - package: dcpu16-tui
+            manifest: tui/Cargo.toml
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Install Rust toolchain
+        env:
+          MANIFEST: ${{ matrix.manifest }}
         run: |
-          msrv="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)"
+          msrv="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' "$MANIFEST")"
           rustup toolchain install "$msrv" --profile minimal
           rustup default "$msrv"
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
+          key: ${{ matrix.package }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - run: cargo check --all-targets --all-features
+      - name: Check
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: cargo check -p "$PACKAGE" --all-targets --all-features
