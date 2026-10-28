@@ -1,0 +1,25 @@
+; Greets on the screen in color and on the console.
+;
+; Screen cells are `ffff bbbb B ccccccc`: foreground, background, blink, character.
+
+              SET I, 0
+:screen       SET A, [message+I]
+              IFE A, 0
+                 SET PC, console
+              BOR A, 0xe100            ; yellow on blue
+              SET [0x8000+I], A
+              ADD I, 1
+              SET PC, screen
+
+:console      SET I, 0
+:print        SET A, [message+I]
+              IFE A, 0
+                 SET PC, cursor
+              SET [0x9010], A          ; the console prints and clears the word
+              ADD I, 1
+              SET PC, print
+
+:cursor       SET [0x8000+I], 0xf0df   ; a blinking, white underscore
+:end          SET PC, end
+
+:message      DAT "Hello, world!", 0

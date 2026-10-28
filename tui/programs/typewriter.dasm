@@ -1,0 +1,70 @@
+; Types keys onto the screen. Enter starts a new line, Backspace deletes.
+;
+; The keyboard writes keys into the ring buffer at 0x9000-0x900f; a key is
+; taken by clearing its slot. Screen cells are `ffff bbbb B ccccccc`.
+
+              SET J, 0
+:title        SET A, [title_text+J]
+              IFE A, 0
+                 SET PC, ready
+              BOR A, 0xe000            ; yellow
+              SET [0x8000+J], A
+              ADD J, 1
+              SET PC, title
+
+:ready        SET I, 0                 ; next keyboard slot
+              SET X, 0x8040            ; cursor, starting on the third row
+
+:wait         SET [X], 0xf0df          ; blinking, white underscore
+              SET A, [0x9000+I]
+              IFE A, 0
+                 SET PC, wait
+              SET [0x9000+I], 0        ; take the key
+              ADD I, 1
+              AND I, 0xf
+
+              IFE A, 0x0a              ; Enter
+                 SET PC, newline
+              IFE A, 0x08              ; Backspace
+                 SET PC, backspace
+              IFG A, 0x7e              ; not printable ASCII
+                 SET PC, wait
+              IFG 0x20, A
+                 SET PC, wait
+
+              BOR A, 0xa000            ; green
+              SET [X], A
+              ADD X, 1
+              SET PC, wrap
+
+:newline      SET [X], 0
+              AND X, 0xffe0            ; start of the row (rows are 32 cells)
+              ADD X, 0x20
+              SET PC, wrap
+
+:backspace    IFG X, 0x8040
+                 SET PC, back
+              SET PC, wait
+:back         SET [X], 0
+              SUB X, 1
+              SET [X], 0
+              SET PC, wait
+
+:wrap         IFG X, 0x817f            ; past the last cell
+                 SET PC, scroll
+              SET PC, wait
+
+; Moves rows three to twelve up by one row and clears the last row.
+:scroll       SET Y, 0x8040
+:scroll_loop  SET [Y], [Y+0x20]
+              ADD Y, 1
+              IFG 0x8160, Y
+                 SET PC, scroll_loop
+:clear        SET [Y], 0
+              ADD Y, 1
+              IFG 0x8180, Y
+                 SET PC, clear
+              SET X, 0x8160
+              SET PC, wait
+
+:title_text   DAT "DCPU-16 typewriter", 0

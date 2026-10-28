@@ -305,3 +305,29 @@ fn run_for_reports_when_execution_stops() {
     assert!(!cpu.run_for(100));
     assert_eq!(cpu.cycles(), 2);
 }
+
+#[test]
+fn disassembles_without_executing() {
+    let mut program = assemble("SET [0x1000], 0x20\nSET PUSH, [A]\nJSR 0x10").unwrap();
+    program.push(0x0000);
+    let cpu = DCPU16::new(&program);
+
+    let mut address = 0;
+    let mut lines = Vec::new();
+    while usize::from(address) < program.len() {
+        let disassembly = cpu.disassemble(address);
+        lines.push(disassembly.text);
+        address += disassembly.length;
+    }
+    assert_eq!(
+        lines,
+        [
+            "SET [0x1000], 0x20",
+            "SET PUSH, [A]",
+            "JSR 0x10",
+            "DAT 0x0000"
+        ]
+    );
+    assert_eq!(cpu.program_counter, 0);
+    assert_eq!(cpu.stack_pointer, 0);
+}

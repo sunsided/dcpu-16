@@ -33,3 +33,8 @@ tracing = "0.1.44"
 
 [dev-dependencies]
 tracing-subscriber = "0.3.23"
+
+[workspace]
+members = ["tui"]
+# The fuzz crate is its own workspace, since it builds with nightly only.
+exclude = ["fuzz"]
