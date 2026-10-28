@@ -1,10 +1,10 @@
 //! Turns assembler [`Token`]s into [`MetaInstruction`]s, one source line at a time.
 
 use super::error::{AssembleError, AssembleErrorKind, Position};
-use super::lexer::{tokenize, Token, TokenKind};
+use super::lexer::{Token, TokenKind, tokenize};
 use super::{BasicOperationName, Instruction, MetaInstruction, NonBasicOperationName, Value};
-use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
 use crate::Register;
+use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
 use std::collections::HashSet;
 
 /// Parses the source and generates a stream of [`MetaInstruction`] instances.
@@ -154,7 +154,7 @@ impl<'t, 'a> LineParser<'t, 'a> {
                     return Err(AssembleError::new(
                         AssembleErrorKind::LabelNotAllowed(name),
                         a_position,
-                    ))
+                    ));
                 }
             };
             self.expect(TokenKind::Comma, "`,`")?;

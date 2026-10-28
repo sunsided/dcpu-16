@@ -1,9 +1,9 @@
 //! Rendering of instructions and operands as assembly mnemonics and human-readable text.
 
+use crate::Register;
 use crate::instruction::{InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{InstructionArgument, InstructionArgumentDefinition};
 use crate::instruction_word::{InstructionWord, NonBasicInstruction};
-use crate::Register;
 
 /// Renders a value as DCPU-16 assembly.
 pub trait Disassemble {

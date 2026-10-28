@@ -1,6 +1,6 @@
 //! Assembles the example program from the DCPU-16 specification and runs it.
 
-use dcpu16::{assemble, Register, DCPU16};
+use dcpu16::{DCPU16, Register, assemble};
 
 fn main() {
     // Use the RUST_LOG environment variable to configure, e.g. RUST_LOG=dcpu16=trace

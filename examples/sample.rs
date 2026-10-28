@@ -1,6 +1,6 @@
 //! Runs the example program from the DCPU-16 specification from hand-encoded bytecode.
 
-use dcpu16::{Register, DCPU16};
+use dcpu16::{DCPU16, Register};
 
 fn main() {
     // Use the RUST_LOG environment variable to configure, e.g. RUST_LOG=dcpu16=trace

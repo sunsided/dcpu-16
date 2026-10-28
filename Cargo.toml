@@ -1,8 +1,9 @@
 [package]
 name = "dcpu16"
 description = "A DCPU-16 emulator and assembler"
-version = "0.1.0"
-edition = "2018"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Markus Mayer <widemeadows@gmail.com>"]
 license = "MIT"
 readme = "README.md"

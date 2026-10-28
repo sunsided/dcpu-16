@@ -11,7 +11,7 @@ mod parser;
 
 pub use self::error::{AssembleError, AssembleErrorKind, Position};
 use crate::instruction_argument::{InstructionArgument, SpecialRegister, StackOperation};
-use crate::{Word, MAX_PROGRAM_WORDS};
+use crate::{MAX_PROGRAM_WORDS, Word};
 use std::collections::HashMap;
 use tracing::trace;
 

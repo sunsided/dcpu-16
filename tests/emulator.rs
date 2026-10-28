@@ -1,7 +1,7 @@
 //! Instruction semantics checked against the DCPU-16 1.1 specification in `docs/specification.txt`.
 #![cfg(feature = "assembler")]
 
-use dcpu16::{assemble, Register, DCPU16};
+use dcpu16::{DCPU16, Register, assemble};
 
 /// Assembles and runs `source` until it ends, then hands the CPU to `check`.
 fn run<R>(source: &str, check: impl FnOnce(&DCPU16) -> R) -> R {
