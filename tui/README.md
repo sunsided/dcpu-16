@@ -1,10 +1,12 @@
 # dcpu16-tui
 
+[![The terminal UI running the typewriter demo](../docs/tui.png)](https://sunsided.github.io/dcpu-16/)
+
 A terminal user interface for the [`dcpu16`](..) DCPU-16 emulator. It assembles a
 program, runs it at the 100 kHz of the original, and shows:
 
 - **Screen:** the 32×12 character cells at `0x8000`, with colors from the LEM1802
-  palette and blinking. Cells without color bits use the terminal's colors.
+  palette and blinking. Cells without color bits glow in green phosphor.
 - **Console:** what the program printed through the console word at `0x9010`.
 - **Registers:** `A`–`J`, `PC`, `SP`, `O` and the cycle count; values that just
   changed light up.

@@ -11,9 +11,10 @@ the crate's `assembler` feature. It has no dependencies and reports syntax error
 labels, out-of-range literals and programs longer than the emulator accepts as an `AssembleError` with the line
 and column of the problem.
 
----
+[![The terminal UI running the typewriter demo: the screen, registers, hardware state and syntax-highlighted code](docs/tui.png)](https://sunsided.github.io/dcpu-16/)
 
-Cycle counts are currently not emulated.
+The [terminal UI](#terminal-ui) above runs programs with a screen, keyboard and console, and also
+[runs in the browser](https://sunsided.github.io/dcpu-16/).
 
 ## Example usage
 
