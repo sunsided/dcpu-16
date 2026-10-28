@@ -1,7 +1,8 @@
 //! Generates syntactically valid programs and checks that they assemble.
 //!
 //! Every program built here follows the assembler grammar, so assembling must
-//! succeed, and every instruction must encode to one to three words.
+//! succeed, every instruction must encode to one to three words, and every
+//! `DAT` directive to exactly as many words as it lists.
 
 #![no_main]
 
@@ -53,6 +54,19 @@ enum Instruction {
     },
     /// `JSR` with its operand.
     Jsr(Operand),
+    /// `DAT` with at least one item.
+    Data(Datum, Vec<Datum>),
+}
+
+/// An item of a `DAT` directive.
+#[derive(Arbitrary, Debug)]
+enum Datum {
+    /// A number, written as hex if the flag is set.
+    Number(u16, bool),
+    /// A string literal; each byte selects a character or escape sequence.
+    String(Vec<u8>),
+    /// A reference to a defined label.
+    Label(u8),
 }
 
 /// An operand in any of its source forms.
@@ -70,8 +84,13 @@ enum Operand {
     AddressFromRegister(u8),
     /// `[literal+register]`, written as hex if the flag is set.
     AddressOffset(u16, u8, bool),
+    /// `[register+literal]`, written as hex if the flag is set.
+    RegisterOffset(u8, u16, bool),
     /// A reference to a defined label.
     Label(u8),
+    /// `[label]`, `[label+register]` or `[register+label]`, depending on the
+    /// optional register and the flag.
+    LabelAddress(u8, Option<u8>, bool),
 }
 
 /// Formatting choices that must not change the result.
@@ -112,10 +131,65 @@ impl Operand {
             Self::AddressOffset(v, r, hex) => {
                 let _ = write!(out, "[{}{plus}{}]", number(v, hex), register(r));
             }
+            Self::RegisterOffset(r, v, hex) => {
+                let _ = write!(out, "[{}{plus}{}]", register(r), number(v, hex));
+            }
             Self::Label(l) if allow_label && labels > 0 => {
                 let _ = write!(out, "label{}", l as usize % labels);
             }
             Self::Label(l) => out.push_str(&number(l.into(), false)),
+            Self::LabelAddress(l, _, _) if labels == 0 => {
+                let _ = write!(out, "[{}]", number(l.into(), false));
+            }
+            Self::LabelAddress(l, None, _) => {
+                let _ = write!(out, "[label{}]", l as usize % labels);
+            }
+            Self::LabelAddress(l, Some(r), register_first) => {
+                let label = format!("label{}", l as usize % labels);
+                if register_first {
+                    let _ = write!(out, "[{}{plus}{label}]", register(r));
+                } else {
+                    let _ = write!(out, "[{label}{plus}{}]", register(r));
+                }
+            }
+        }
+    }
+}
+
+/// Characters and escape sequences a string literal is built from, each one word.
+const STRING_PARTS: [&str; 12] = [
+    "a", "Z", "0", " ", ",", ";", "\\\"", "\\\\", "\\n", "\\0", "€", "]",
+];
+
+impl Datum {
+    /// Renders the item and returns the number of words it encodes to.
+    /// Label references fall back to a number if no label exists.
+    fn render(&self, out: &mut String, labels: usize) -> usize {
+        match self {
+            Self::Number(v, true) => {
+                let _ = write!(out, "0x{v:x}");
+                1
+            }
+            Self::Number(v, false) => {
+                let _ = write!(out, "{v}");
+                1
+            }
+            Self::String(parts) => {
+                out.push('"');
+                for part in parts {
+                    out.push_str(STRING_PARTS[*part as usize % STRING_PARTS.len()]);
+                }
+                out.push('"');
+                parts.len()
+            }
+            Self::Label(l) if labels > 0 => {
+                let _ = write!(out, "label{}", *l as usize % labels);
+                1
+            }
+            Self::Label(l) => {
+                let _ = write!(out, "{l}");
+                1
+            }
         }
     }
 }
@@ -128,6 +202,7 @@ fuzz_target!(|program: Program| {
     let mut source = String::new();
     let mut defined = 0;
     let mut instructions = 0;
+    let mut data_words = 0;
     for line in &program.lines {
         let style = &line.style;
         let comma = if style.spaced { " , " } else { ", " };
@@ -152,6 +227,14 @@ fuzz_target!(|program: Program| {
                 a.render(&mut source, labels, true, style.spaced);
                 instructions += 1;
             }
+            Some(Instruction::Data(first, rest)) => {
+                source.push_str("DAT ");
+                data_words += first.render(&mut source, labels);
+                for datum in rest {
+                    source.push_str(comma);
+                    data_words += datum.render(&mut source, labels);
+                }
+            }
             None => {}
         }
 
@@ -166,8 +249,8 @@ fuzz_target!(|program: Program| {
         Err(error) => panic!("valid program rejected: {error}\n{source}"),
     };
     assert!(
-        (instructions..=3 * instructions).contains(&words.len()),
-        "{instructions} instructions encoded to {} words\n{source}",
+        (instructions + data_words..=3 * instructions + data_words).contains(&words.len()),
+        "{instructions} instructions and {data_words} data words encoded to {} words\n{source}",
         words.len()
     );
 });

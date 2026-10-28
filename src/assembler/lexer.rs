@@ -12,6 +12,9 @@ pub(super) enum TokenKind<'a> {
     Ident(&'a str),
     /// A decimal or hexadecimal literal.
     Number(Word),
+    /// A string literal such as `"Hi\n"`, without the quotes and with escapes
+    /// still in place; [`string_words`] decodes it.
+    Str(&'a str),
     /// `,` between two operands.
     Comma,
     /// `+` in an offset address such as `[0x10+A]`.
@@ -68,6 +71,7 @@ pub(super) fn tokenize(source: &str) -> Result<Vec<Token<'_>>, AssembleError> {
                 lexer.bump();
                 continue;
             }
+            '"' => TokenKind::Str(lexer.string()?),
             ',' => lexer.single(TokenKind::Comma),
             '+' => lexer.single(TokenKind::Plus),
             '[' => lexer.single(TokenKind::OpenBracket),
@@ -147,6 +151,50 @@ impl<'a> Lexer<'a> {
         kind
     }
 
+    /// Consumes a string literal, validating its escapes and characters, and
+    /// returns its contents between the quotes.
+    fn string(&mut self) -> Result<&'a str, AssembleError> {
+        let opening = self.position;
+        self.bump();
+        let start = self.offset;
+        loop {
+            let position = self.position;
+            match self.peek() {
+                Some('"') => break,
+                None | Some('\n' | '\r') => {
+                    return Err(AssembleError::new(
+                        AssembleErrorKind::UnterminatedString,
+                        opening,
+                    ));
+                }
+                Some('\\') => {
+                    self.bump();
+                    match self.peek() {
+                        Some(c) if unescape(c).is_some() => self.bump(),
+                        // A line break or the end of input is reported as an unterminated string.
+                        None | Some('\n' | '\r') => {}
+                        Some(c) => {
+                            return Err(AssembleError::new(
+                                AssembleErrorKind::InvalidEscape(c),
+                                position,
+                            ));
+                        }
+                    }
+                }
+                Some(c) if Word::try_from(u32::from(c)).is_err() => {
+                    return Err(AssembleError::new(
+                        AssembleErrorKind::CharacterOutOfRange(c),
+                        position,
+                    ));
+                }
+                Some(_) => self.bump(),
+            }
+        }
+        let contents = &self.source[start..self.offset];
+        self.bump();
+        Ok(contents)
+    }
+
     /// Consumes characters while the predicate holds and returns them.
     fn bump_while(&mut self, predicate: impl Fn(char) -> bool) -> &'a str {
         let start = self.offset;
@@ -155,6 +203,33 @@ impl<'a> Lexer<'a> {
         }
         &self.source[start..self.offset]
     }
+}
+
+/// Decodes the contents of a [`TokenKind::Str`] into one word per character.
+pub(super) fn string_words(contents: &str) -> impl Iterator<Item = Word> + '_ {
+    let mut chars = contents.chars();
+    std::iter::from_fn(move || {
+        let c = match chars.next()? {
+            // The lexer only produces valid escapes.
+            '\\' => chars.next().and_then(unescape)?,
+            c => c,
+        };
+        // The lexer only accepts characters that fit into a word.
+        Some(u32::from(c) as Word)
+    })
+}
+
+/// Maps the character after a `\` in a string literal to the character it stands for.
+fn unescape(c: char) -> Option<char> {
+    Some(match c {
+        '\\' => '\\',
+        '"' => '"',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        '0' => '\0',
+        _ => return None,
+    })
 }
 
 /// Whether `c` may appear in a mnemonic, register name, label or number.

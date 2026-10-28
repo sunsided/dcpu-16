@@ -1,4 +1,6 @@
-//! Expected outputs were captured from the previous pest-based assembler.
+//! Expected outputs of the original syntax were captured from the previous pest-based
+//! assembler; `DAT` and label references inside brackets are checked against the
+//! equivalent numeric forms.
 #![cfg(feature = "assembler")]
 
 use dcpu16::{AssembleErrorKind, DCPU16, Position, assemble};
@@ -99,6 +101,74 @@ fn uses_long_form_for_distant_labels() {
     expected.extend([0x81c1, 0x7c10, 0x003e, 0x7c01, 0x003e]);
 
     assert_eq!(assemble(source).unwrap(), expected);
+}
+
+#[test]
+fn moves_labels_directly_behind_a_growing_instruction() {
+    // `SET PC, far` only grows to two words once `far` is known to be distant,
+    // which must also move `next`, the label right behind it, to address 2.
+    let mut source = String::from("SET PC, far\n:next SET A, next\n");
+    source.push_str(&"SET [0x1000], 0x1234\n".repeat(20));
+    source.push_str(":far SET PC, far\n");
+
+    let program = assemble(source).unwrap();
+    assert_eq!(program[..3], [0x7dc1, 0x003f, 0x8801]);
+}
+
+#[test]
+fn assembles_data() {
+    assert_eq!(
+        assemble("DAT 1, 0x20, 0xffff").unwrap(),
+        [0x0001, 0x0020, 0xffff]
+    );
+    assert_eq!(
+        assemble(r#"DAT "Hi", 0"#).unwrap(),
+        [u16::from(b'H'), u16::from(b'i'), 0]
+    );
+    assert_eq!(
+        assemble(r#"DAT "\"\\\n\r\t\0", """#).unwrap(),
+        [0x22, 0x5c, 0x0a, 0x0d, 0x09, 0x00]
+    );
+    assert_eq!(assemble("DAT \"€\"").unwrap(), [0x20ac]);
+}
+
+#[test]
+fn assembles_label_addresses_in_data() {
+    assert_eq!(
+        assemble(":a DAT b, a\n:b DAT \"xy\", b").unwrap(),
+        [0x0002, 0x0000, 0x0078, 0x0079, 0x0002]
+    );
+}
+
+#[test]
+fn data_can_be_read_by_label() {
+    let program = assemble(
+        "SET A, [msg]\nSET B, [msg+I]\nSET I, 1\nSET C, [I+msg]\n:end SET PC, end\n:msg DAT 7, 9",
+    )
+    .unwrap();
+    let mut cpu = DCPU16::new(&program);
+    cpu.run();
+    assert_eq!(cpu.register(dcpu16::Register::A), 7);
+    assert_eq!(cpu.register(dcpu16::Register::B), 7);
+    assert_eq!(cpu.register(dcpu16::Register::C), 9);
+}
+
+#[test]
+fn assembles_label_addresses_like_numeric_addresses() {
+    // The label sits at 0x0a; brackets always use the next-word form, even for small addresses.
+    let padding = "SET A, 1\n".repeat(10);
+    let labelled = format!("{padding}:x SET [x], [x+A]\nSET [B+x], x\nJSR [x]\nSET A, [x+J]");
+    let numeric =
+        format!("{padding}SET [0x0a], [0x0a+A]\nSET [0x0a+B], 0x0a\nJSR [0x0a]\nSET A, [0x0a+J]");
+    assert_eq!(assemble(labelled).unwrap(), assemble(numeric).unwrap());
+}
+
+#[test]
+fn accepts_register_before_literal_offset() {
+    assert_eq!(
+        assemble("SET [A+0x10], [B+5]").unwrap(),
+        assemble("SET [0x10+A], [5+B]").unwrap()
+    );
 }
 
 #[test]
@@ -311,6 +381,89 @@ fn reports_non_register_offset() {
             },
             at(1, 11)
         )
+    );
+}
+
+#[test]
+fn reports_undefined_label_in_brackets_and_data() {
+    assert_eq!(
+        error("SET A, [B+nowhere]"),
+        (
+            AssembleErrorKind::UndefinedLabel("nowhere".into()),
+            at(1, 11)
+        )
+    );
+    assert_eq!(
+        error("DAT 1, nowhere"),
+        (
+            AssembleErrorKind::UndefinedLabel("nowhere".into()),
+            at(1, 8)
+        )
+    );
+}
+
+#[test]
+fn reports_invalid_address_expressions() {
+    for (source, expected, found, column) in [
+        ("SET A, [PC]", "a literal, register or label", "`PC`", 9),
+        ("SET A, []", "a literal, register or label", "`]`", 9),
+        ("SET A, [A+B]", "a literal or label", "`B`", 11),
+        ("SET A, [x+1]", "a register", "`1`", 11),
+        ("SET A, [1+2]", "a register", "`2`", 11),
+    ] {
+        assert_eq!(
+            error(&format!("{source}\n:x")),
+            (
+                AssembleErrorKind::Expected {
+                    expected,
+                    found: found.into()
+                },
+                at(1, column)
+            ),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn reports_invalid_data() {
+    for (source, found, column) in [
+        ("DAT", "end of line", 4),
+        ("DAT 1,", "end of line", 7),
+        ("DAT A", "`A`", 5),
+        ("DAT [1]", "`[`", 5),
+    ] {
+        assert_eq!(
+            error(source),
+            (
+                AssembleErrorKind::Expected {
+                    expected: "a number, string or label",
+                    found: found.into()
+                },
+                at(1, column)
+            ),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn reports_invalid_strings() {
+    assert_eq!(
+        error("DAT 1, \"abc\nDAT 2"),
+        (AssembleErrorKind::UnterminatedString, at(1, 8))
+    );
+    assert_eq!(
+        error("DAT \"abc\\\""),
+        (AssembleErrorKind::UnterminatedString, at(1, 5))
+    );
+    assert_eq!(
+        error("DAT \"a\\qb\""),
+        (AssembleErrorKind::InvalidEscape('q'), at(1, 7))
+    );
+    assert_eq!(
+        error("DAT \"a🦀\""),
+        (AssembleErrorKind::CharacterOutOfRange('🦀'), at(1, 7))
     );
 }
 
