@@ -1,16 +1,17 @@
-; Types keys onto the screen. Enter starts a new line, Backspace deletes.
+; Types keys onto the screen. Enter starts a new line, Backspace deletes,
+; and the text scrolls up once the screen is full.
 ;
 ; The keyboard writes keys into the ring buffer at 0x9000-0x900f; a key is
 ; taken by clearing its slot. Screen cells are `ffff bbbb B ccccccc`.
 
-              SET J, 0
-:title        SET A, [title_text+J]
-              IFE A, 0
-                 SET PC, ready
-              BOR A, 0xe000            ; yellow
-              SET [0x8000+J], A
-              ADD J, 1
-              SET PC, title
+              SET A, title_text
+              SET B, 0x8000            ; first row
+              SET C, 0xe000            ; yellow
+              JSR print
+              SET A, hint_text
+              SET B, 0x8020            ; second row
+              SET C, 0x7000            ; grey
+              JSR print
 
 :ready        SET I, 0                 ; next keyboard slot
               SET X, 0x8040            ; cursor, starting on the third row
@@ -67,4 +68,15 @@
               SET X, 0x8160
               SET PC, wait
 
+; Prints the zero-terminated string at A to the screen at B in color C.
+:print        SET X, [A]
+              IFE X, 0
+                 SET PC, POP
+              BOR X, C
+              SET [B], X
+              ADD A, 1
+              ADD B, 1
+              SET PC, print
+
 :title_text   DAT "DCPU-16 typewriter", 0
+:hint_text    DAT "Type! Enter: new line", 0

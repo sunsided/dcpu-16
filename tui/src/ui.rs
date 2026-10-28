@@ -458,6 +458,13 @@ fn draw_footer(frame: &mut Frame, area: Rect) {
     });
     let line = Line::from_iter(std::iter::once(Span::raw(" ")).chain(spans));
     frame.render_widget(Paragraph::new(line).style(Style::new().bg(BAR_BG)), area);
+
+    let typing = Line::from(vec![
+        Span::styled("other keys ", theme::fg(DIM)),
+        Span::styled("→ program ", theme::bold(CYAN)),
+    ])
+    .right_aligned();
+    frame.render_widget(Paragraph::new(typing), area);
 }
 
 /// Formats a measured speed in cycles per second, e.g. `99.8 kHz`.
@@ -524,6 +531,11 @@ mod tests {
             lines.join("\n")
         );
         assert!(lines[23].contains(" F5  run/pause"), "{}", lines[23]);
+        assert!(
+            lines[23].ends_with("other keys → program "),
+            "{}",
+            lines[23]
+        );
 
         let hardware = lines[2..7].join("\n");
         assert!(

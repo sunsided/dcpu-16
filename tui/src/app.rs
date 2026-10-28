@@ -491,6 +491,7 @@ mod tests {
         type_text(&mut app, "Hi\nthere\x08\x08\x08y\u{7f}");
         let screen = screen_text(&app);
         assert_eq!(screen[0], "DCPU-16 typewriter");
+        assert_eq!(screen[1], "Type! Enter: new line");
         assert_eq!(screen[2], "Hi");
         assert_eq!(screen[3], "thy_");
         assert_eq!(app.state, State::Running);
