@@ -1,7 +1,9 @@
 //! The emulator state behind the user interface and its reaction to keys.
 
 use dcpu16::DCPU16;
-use dcpu16::devices::{Console, Keyboard, KeyboardInput};
+use dcpu16::devices::{
+    Console, KEYBOARD_BUFFER, KEYBOARD_BUFFER_LEN, Keyboard, KeyboardInput, VIDEO_RAM, screen,
+};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::cell::Cell;
 use std::io::Write;
@@ -21,6 +23,15 @@ const MAX_ELAPSED: Duration = Duration::from_millis(100);
 /// Upper bound of the console text kept for display, in bytes.
 const MAX_OUTPUT: usize = 64 * 1024;
 
+/// Frames a device's activity light stays lit after the device was used, about 200 ms.
+const ACTIVITY_FRAMES: u8 = 12;
+
+/// How long the clock speed is measured before the shown value updates.
+const MEASURE_WINDOW: Duration = Duration::from_millis(500);
+
+/// Number of words of video RAM.
+const VIDEO_WORDS: usize = screen::WIDTH * screen::HEIGHT;
+
 /// Whether the program executes.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum State {
@@ -34,6 +45,51 @@ pub enum State {
 
 /// The registers `A`–`J`, then `PC`, `SP` and `O`.
 pub type Registers = [u16; 11];
+
+/// Recent use of the memory-mapped devices, as the number of frames each
+/// activity light stays lit.
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub struct Activity {
+    /// Video RAM changed.
+    pub video: u8,
+    /// The keyboard buffer changed: a key arrived or the program took one.
+    pub keyboard: u8,
+    /// The console printed a character.
+    pub console: u8,
+}
+
+impl Activity {
+    /// Dims every light by one frame.
+    fn decay(&mut self) {
+        self.video = self.video.saturating_sub(1);
+        self.keyboard = self.keyboard.saturating_sub(1);
+        self.console = self.console.saturating_sub(1);
+    }
+}
+
+/// The parts of the machine state that reveal device activity.
+struct DeviceState {
+    /// The video RAM.
+    video: Vec<u16>,
+    /// The keyboard ring buffer.
+    keyboard: Vec<u16>,
+    /// The number of characters printed to the console.
+    printed: usize,
+}
+
+impl DeviceState {
+    /// Captures the device state of `cpu` and `output`.
+    fn capture(cpu: &DCPU16, output: &ConsoleOutput) -> Self {
+        let ram = cpu.ram();
+        let video = usize::from(VIDEO_RAM);
+        let keyboard = usize::from(KEYBOARD_BUFFER);
+        Self {
+            video: ram[video..video + VIDEO_WORDS].to_vec(),
+            keyboard: ram[keyboard..keyboard + usize::from(KEYBOARD_BUFFER_LEN)].to_vec(),
+            printed: output.printed().0,
+        }
+    }
+}
 
 /// The emulated machine and the controls around it.
 pub struct App {
@@ -58,6 +114,12 @@ pub struct App {
     /// The address of the first instruction in the code panel. It stays put while
     /// the program counter moves within the panel, so loops do not scroll.
     pub code_top: Cell<u16>,
+    /// Recent use of the devices.
+    pub activity: Activity,
+    /// The measured clock speed in cycles per second, while running.
+    pub measured_hz: Option<f64>,
+    /// Cycles executed and time passed since the clock speed was last measured.
+    meter: (u64, Duration),
     /// Set once the user asked to quit.
     pub quit: bool,
 }
@@ -70,6 +132,9 @@ impl App {
             name: name.into(),
             previous: registers(&cpu),
             code_top: Cell::new(cpu.program_counter),
+            activity: Activity::default(),
+            measured_hz: None,
+            meter: (0, Duration::ZERO),
             program,
             cpu,
             keyboard,
@@ -87,23 +152,53 @@ impl App {
     }
 
     /// Executes the cycles that are due after `elapsed` time at the selected speed.
+    ///
+    /// Called once per frame, also while not running, so activity lights fade.
     pub fn advance(&mut self, elapsed: Duration) {
+        self.activity.decay();
         if self.state != State::Running {
+            self.measured_hz = None;
+            self.meter = (0, Duration::ZERO);
             return;
         }
         self.previous = registers(&self.cpu);
 
-        self.budget += elapsed.min(MAX_ELAPSED).as_secs_f64() * self.speed() as f64;
-        if self.budget < 1.0 {
-            return;
+        let elapsed = elapsed.min(MAX_ELAPSED);
+        self.budget += elapsed.as_secs_f64() * self.speed() as f64;
+        let before = self.cpu.cycles();
+        if self.budget >= 1.0 {
+            let budget = self.budget as u64;
+            let running = self.execute(|cpu| cpu.run_for(budget));
+            self.budget -= (self.cpu.cycles() - before) as f64;
+            if !running {
+                self.state = State::Halted;
+            }
         }
 
-        let before = self.cpu.cycles();
-        let running = self.cpu.run_for(self.budget as u64);
-        self.budget -= (self.cpu.cycles() - before) as f64;
-        if !running {
-            self.state = State::Halted;
+        self.meter.0 += self.cpu.cycles() - before;
+        self.meter.1 += elapsed;
+        if self.meter.1 >= MEASURE_WINDOW {
+            self.measured_hz = Some(self.meter.0 as f64 / self.meter.1.as_secs_f64());
+            self.meter = (0, Duration::ZERO);
         }
+    }
+
+    /// Runs `run` on the CPU and lights up the devices it used.
+    fn execute(&mut self, run: impl FnOnce(&mut DCPU16) -> bool) -> bool {
+        let before = DeviceState::capture(&self.cpu, &self.output);
+        let running = run(&mut self.cpu);
+        let after = DeviceState::capture(&self.cpu, &self.output);
+
+        if before.video != after.video {
+            self.activity.video = ACTIVITY_FRAMES;
+        }
+        if before.keyboard != after.keyboard {
+            self.activity.keyboard = ACTIVITY_FRAMES;
+        }
+        if before.printed != after.printed {
+            self.activity.console = ACTIVITY_FRAMES;
+        }
+        running
     }
 
     /// Reacts to a key: controls on function keys and `Ctrl`, everything else goes
@@ -126,7 +221,7 @@ impl App {
             }
             KeyCode::F(10) if self.state == State::Paused => {
                 self.previous = registers(&self.cpu);
-                if !self.cpu.step() {
+                if !self.execute(DCPU16::step) {
                     self.state = State::Halted;
                 }
             }
@@ -151,6 +246,9 @@ impl App {
         self.output = output;
         self.state = State::Running;
         self.budget = 0.0;
+        self.activity = Activity::default();
+        self.measured_hz = None;
+        self.meter = (0, Duration::ZERO);
     }
 }
 
@@ -209,20 +307,43 @@ fn key_code(key: KeyEvent) -> Option<u16> {
 
 /// The text the program printed through the console, shared with the console device.
 #[derive(Clone, Default)]
-pub struct ConsoleOutput(Arc<Mutex<String>>);
+pub struct ConsoleOutput(Arc<Mutex<Printed>>);
+
+/// The console text and how much was printed.
+#[derive(Default)]
+struct Printed {
+    /// The text printed so far, or its tail once it grew long.
+    text: String,
+    /// The number of characters printed so far, including those cut from `text`.
+    count: usize,
+}
 
 impl ConsoleOutput {
     /// Gets a copy of the text printed so far, or of its tail once it grew long.
     pub fn text(&self) -> String {
-        self.0.lock().expect("console output poisoned").clone()
+        self.lock().text.clone()
+    }
+
+    /// Gets the number of characters printed so far and the last of them.
+    pub fn printed(&self) -> (usize, Option<char>) {
+        let printed = self.lock();
+        (printed.count, printed.text.chars().next_back())
+    }
+
+    /// Locks the shared output.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Printed> {
+        self.0.lock().expect("console output poisoned")
     }
 }
 
 impl Write for ConsoleOutput {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut text = self.0.lock().expect("console output poisoned");
+        let mut printed = self.lock();
         // The console writes whole UTF-8 characters at a time.
-        text.push_str(&String::from_utf8_lossy(buf));
+        let chunk = String::from_utf8_lossy(buf);
+        printed.count += chunk.chars().count();
+        let text = &mut printed.text;
+        text.push_str(&chunk);
         if text.len() > MAX_OUTPUT {
             let mut cut = text.len() - MAX_OUTPUT / 2;
             while !text.is_char_boundary(cut) {
@@ -391,6 +512,46 @@ mod tests {
         assert_eq!(screen[2], "line 3");
         assert_eq!(screen[10], "line 11");
         assert_eq!(screen[11], "_");
+    }
+
+    #[test]
+    fn lights_up_the_devices_a_program_uses() {
+        let mut app = app("SET [0x8000], 0x41\nSET [0x9010], 0x42\n:end SET PC, end");
+        app.advance(Duration::from_millis(10));
+        assert_eq!(app.activity.video, ACTIVITY_FRAMES);
+        assert_eq!(app.activity.console, ACTIVITY_FRAMES);
+        assert_eq!(app.activity.keyboard, 0);
+        assert_eq!(app.output.printed(), (1, Some('B')));
+
+        // The lights fade frame by frame once the devices are idle.
+        app.advance(Duration::from_millis(10));
+        assert_eq!(app.activity.video, ACTIVITY_FRAMES - 1);
+    }
+
+    #[test]
+    fn lights_up_the_keyboard_when_a_key_arrives() {
+        let mut app = app(":loop SET PC, loop");
+        app.handle_key(press(KeyCode::Char('k')));
+        app.advance(Duration::from_millis(10));
+        assert_eq!(app.activity.keyboard, ACTIVITY_FRAMES);
+        assert_eq!(app.cpu.ram()[0x9000], u16::from(b'k'));
+    }
+
+    #[test]
+    fn measures_the_clock_speed() {
+        let mut app = app(":loop ADD A, 1\nSET PC, loop");
+        // 31 frames of 16 ms stay below the 500 ms window, the 32nd completes it.
+        for _ in 0..31 {
+            app.advance(Duration::from_millis(16));
+            assert_eq!(app.measured_hz, None);
+        }
+        app.advance(Duration::from_millis(16));
+        let hz = app.measured_hz.unwrap();
+        assert!((99_000.0..101_000.0).contains(&hz), "{hz}");
+
+        app.handle_key(press(KeyCode::F(5)));
+        app.advance(Duration::from_millis(16));
+        assert_eq!(app.measured_hz, None);
     }
 
     #[test]

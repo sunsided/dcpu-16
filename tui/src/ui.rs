@@ -4,6 +4,7 @@ use crate::app::{App, State, registers};
 use crate::theme::{self, AMBER, BG, BG_CURSOR, BORDER, CYAN, DIM, FG, GREEN};
 use dcpu16::Disassembly;
 use dcpu16::devices::screen::{self, Cell, PALETTE};
+use dcpu16::devices::{KEYBOARD_BUFFER, KEYBOARD_BUFFER_LEN};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -18,6 +19,12 @@ const SCREEN_PANEL_HEIGHT: u16 = screen::HEIGHT as u16 + 2;
 const CODE_TEXT_WIDTH: usize = 20;
 /// Background of the header and footer bars.
 const BAR_BG: Color = Color::Rgb(26, 20, 8);
+/// Width of the registers panel when the hardware panel sits next to it.
+const REGISTERS_WIDTH: u16 = 24;
+/// Narrowest hardware panel worth showing; below that, the registers take the row.
+const MIN_HARDWARE_WIDTH: u16 = 40;
+/// Number of segments in the clock gauge.
+const GAUGE_SEGMENTS: usize = 10;
 
 /// Draws the whole interface.
 pub fn draw(frame: &mut Frame, app: &App, blink_on: bool) {
@@ -40,7 +47,15 @@ pub fn draw(frame: &mut Frame, app: &App, blink_on: bool) {
     draw_header(frame, header, app, blink_on);
     draw_screen(frame, screen_area, app, blink_on);
     draw_console(frame, console_area, app);
-    draw_registers(frame, registers_area, app);
+    if registers_area.width >= REGISTERS_WIDTH + MIN_HARDWARE_WIDTH {
+        let [registers_area, hardware_area] =
+            Layout::horizontal([Constraint::Length(REGISTERS_WIDTH), Constraint::Min(0)])
+                .areas(registers_area);
+        draw_registers(frame, registers_area, app);
+        draw_hardware(frame, hardware_area, app);
+    } else {
+        draw_registers(frame, registers_area, app);
+    }
     draw_code(frame, code_area, app);
     draw_footer(frame, footer);
 }
@@ -197,6 +212,120 @@ fn draw_registers(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(lines).block(panel("REGISTERS")), area);
 }
 
+/// Draws the state of the memory-mapped devices, the clock and the stack, each
+/// with an activity light.
+fn draw_hardware(frame: &mut Frame, area: Rect, app: &App) {
+    let ram = app.cpu.ram();
+    let activity = app.activity;
+    let device = |active: bool, name: &str, address: &str| {
+        let light = if active {
+            theme::bold(GREEN)
+        } else {
+            theme::fg(BORDER)
+        };
+        vec![
+            Span::styled("● ", light),
+            Span::styled(format!("{name:<9}"), theme::fg(AMBER)),
+            Span::styled(format!("{address:<7}"), theme::fg(DIM)),
+        ]
+    };
+
+    // The screen: how many cells show something.
+    let lit = screen::cells(ram)
+        .filter(|cell| cell.character != 0)
+        .count();
+    let mut video = device(activity.video > 0, "LEM1802", "0x8000");
+    video.extend([
+        Span::styled(lit.to_string(), theme::fg(GREEN)),
+        Span::styled(
+            format!("/{} cells", screen::WIDTH * screen::HEIGHT),
+            theme::fg(DIM),
+        ),
+    ]);
+
+    // The keyboard: the ring buffer, slot by slot.
+    let mut keyboard = device(activity.keyboard > 0, "KEYBOARD", "0x9000");
+    keyboard.push(Span::styled("▕", theme::fg(BORDER)));
+    let buffer = usize::from(KEYBOARD_BUFFER);
+    keyboard.extend(
+        ram[buffer..buffer + usize::from(KEYBOARD_BUFFER_LEN)]
+            .iter()
+            .map(|&key| key_span(key)),
+    );
+    keyboard.push(Span::styled("▏", theme::fg(BORDER)));
+
+    // The console: how much was printed, and the last character.
+    let (printed, last) = app.output.printed();
+    let mut console = device(activity.console > 0, "CONSOLE", "0x9010");
+    console.extend([
+        Span::styled(printed.to_string(), theme::fg(GREEN)),
+        Span::styled(" chars", theme::fg(DIM)),
+    ]);
+    if let Some(last) = last {
+        console.extend([
+            Span::styled("  last ", theme::fg(DIM)),
+            Span::styled(format!("'{}'", last.escape_debug()), theme::fg(GREEN)),
+        ]);
+    }
+
+    // The clock: the measured speed against the selected one.
+    let mut clock = device(app.state == State::Running, "CLOCK", "");
+    match app.measured_hz {
+        Some(hz) => {
+            let ratio = (hz / app.speed() as f64).clamp(0.0, 1.0);
+            let filled = (ratio * GAUGE_SEGMENTS as f64).round() as usize;
+            clock.extend([
+                Span::styled("▰".repeat(filled), theme::fg(GREEN)),
+                Span::styled("▱".repeat(GAUGE_SEGMENTS - filled), theme::fg(BORDER)),
+                Span::styled(format!(" {}", format_rate(hz)), theme::fg(GREEN)),
+            ]);
+        }
+        None => clock.push(Span::styled("stopped", theme::fg(DIM))),
+    }
+
+    // The stack: its depth and the values on top.
+    let sp = app.cpu.stack_pointer;
+    let mut stack = device(sp != app.previous[9], "STACK", "");
+    if sp == 0 {
+        stack.push(Span::styled("empty", theme::fg(DIM)));
+    } else {
+        let depth = 0x10000 - usize::from(sp);
+        stack.extend([
+            Span::styled(depth.to_string(), theme::fg(GREEN)),
+            Span::styled(" deep ", theme::fg(DIM)),
+        ]);
+        let top = (0..depth.min(3)).map(|offset| ram[usize::from(sp) + offset]);
+        stack.extend(top.map(|word| Span::styled(format!(" {word:04X}"), theme::fg(FG))));
+        if depth > 3 {
+            stack.push(Span::styled(" …", theme::fg(DIM)));
+        }
+    }
+
+    let lines: Vec<Line> = [video, keyboard, console, clock, stack]
+        .into_iter()
+        .map(Line::from)
+        .collect();
+    frame.render_widget(Paragraph::new(lines).block(panel("HARDWARE")), area);
+}
+
+/// Renders a slot of the keyboard buffer: the key, or `·` when the slot is free.
+fn key_span(key: u16) -> Span<'static> {
+    let symbol = match key {
+        0 => return Span::styled("·", theme::fg(BORDER)),
+        0x0a => '⏎',
+        0x08 => '⌫',
+        0x09 => '⇥',
+        0x80 => '↑',
+        0x81 => '↓',
+        0x82 => '←',
+        0x83 => '→',
+        key => char::from_u32(key.into())
+            .filter(|c| !c.is_control())
+            .unwrap_or('?'),
+    };
+    Span::styled(symbol.to_string(), theme::bold(CYAN))
+}
+
 /// Lines the code panel keeps visible above the program counter when it scrolls.
 const CODE_CONTEXT: usize = 3;
 /// Lines the code panel keeps visible below the program counter before it scrolls.
@@ -331,6 +460,17 @@ fn draw_footer(frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(line).style(Style::new().bg(BAR_BG)), area);
 }
 
+/// Formats a measured speed in cycles per second, e.g. `99.8 kHz`.
+fn format_rate(hz: f64) -> String {
+    if hz >= 1_000_000.0 {
+        format!("{:.1} MHz", hz / 1_000_000.0)
+    } else if hz >= 1_000.0 {
+        format!("{:.1} kHz", hz / 1_000.0)
+    } else {
+        format!("{hz:.0} Hz")
+    }
+}
+
 /// Formats a speed in cycles per second, e.g. `100 kHz`.
 fn format_speed(hz: u64) -> String {
     match hz {
@@ -384,6 +524,38 @@ mod tests {
             lines.join("\n")
         );
         assert!(lines[23].contains(" F5  run/pause"), "{}", lines[23]);
+
+        let hardware = lines[2..7].join("\n");
+        assert!(
+            hardware.contains("LEM1802  0x8000 2/384 cells"),
+            "{hardware}"
+        );
+        assert!(
+            hardware.contains("KEYBOARD 0x9000 ▕················▏"),
+            "{hardware}"
+        );
+        assert!(
+            hardware.contains("CONSOLE  0x9010 1 chars  last 'o'"),
+            "{hardware}"
+        );
+        assert!(hardware.contains("CLOCK           stopped"), "{hardware}");
+        assert!(hardware.contains("STACK           empty"), "{hardware}");
+    }
+
+    #[test]
+    fn renders_keyboard_slots() {
+        assert_eq!(key_span(0).content, "·");
+        assert_eq!(key_span(0x61).content, "a");
+        assert_eq!(key_span(0x0a).content, "⏎");
+        assert_eq!(key_span(0x82).content, "←");
+        assert_eq!(key_span(0x07).content, "?");
+    }
+
+    #[test]
+    fn formats_measured_rates() {
+        assert_eq!(format_rate(99_812.0), "99.8 kHz");
+        assert_eq!(format_rate(1_250_000.0), "1.2 MHz");
+        assert_eq!(format_rate(512.4), "512 Hz");
     }
 
     /// Gets the address and whether it is marked as current for each code line.

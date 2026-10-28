@@ -8,6 +8,8 @@ program, runs it at the 100 kHz of the original, and shows:
 - **Console:** what the program printed through the console word at `0x9010`.
 - **Registers:** `A`–`J`, `PC`, `SP`, `O` and the cycle count; values that just
   changed light up.
+- **Hardware:** the screen, keyboard and console with activity lights, the keyboard
+  ring buffer slot by slot, the measured clock speed, and the stack.
 - **Code:** the disassembled instructions from the program counter on, syntax
   highlighted and with a plain-English comment, e.g. `SET [X], 0xF0DF ; store 0xF0DF in RAM[X]`.
 
