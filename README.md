@@ -334,6 +334,10 @@ typed keys to the program:
 task run:tui PROGRAM=tui/programs/typewriter.dasm
 ```
 
+The same interface also runs in the browser, with the demo programs built in:
+**[sunsided.github.io/dcpu-16](https://sunsided.github.io/dcpu-16/)**. `task dev:web` serves it
+locally with live reload, and `task build:web` builds the site into `target/site`.
+
 ## Fuzzing
 
 There are three [cargo-fuzz] targets in [fuzz/](fuzz/):

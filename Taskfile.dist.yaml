@@ -121,6 +121,31 @@ tasks:
     cmds:
       - cargo run --example echo
 
+  dev:web:
+    desc: Serve the browser build of the terminal UI with live reload (trunk serve)
+    dir: tui
+    preconditions: &web-preconditions
+      - sh: command -v trunk
+        msg: "trunk not found — cargo install trunk --locked"
+      - sh: rustup target list --installed | grep -q wasm32-unknown-unknown
+        msg: "wasm32 target missing — rustup target add wasm32-unknown-unknown"
+    cmds:
+      - trunk serve --release {{.CLI_ARGS}}
+
+  build:web:
+    desc: Build the browser version of the terminal UI into target/site (as published to GitHub Pages)
+    dir: tui
+    preconditions: *web-preconditions
+    cmds:
+      - trunk build --release --public-url ./ --dist ../target/site {{.CLI_ARGS}}
+      - rm -f ../target/site/.trunk-lock
+
+  lint:web:
+    desc: Lint the browser build of the terminal UI
+    preconditions: *web-preconditions
+    cmds:
+      - cargo clippy -p dcpu16-tui --target wasm32-unknown-unknown --all-targets -- -D warnings
+
   run:tui:
     desc: Run a program in the terminal UI (PROGRAM=path to a .dasm file)
     preconditions: *cargo

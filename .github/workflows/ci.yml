@@ -40,6 +40,29 @@ jobs:
 
       - run: task ci
 
+  web:
+    name: Browser build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain with the wasm32 target
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy --target wasm32-unknown-unknown
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: wasm32
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Lint
+        run: cargo clippy -p dcpu16-tui --target wasm32-unknown-unknown --all-targets -- -D warnings
+
   msrv:
     name: Minimum supported Rust version (${{ matrix.package }})
     runs-on: ubuntu-latest

@@ -4,7 +4,6 @@ use dcpu16::devices::{
     Console, KEYBOARD_BUFFER, KEYBOARD_BUFFER_LEN, Keyboard, KeyboardInput, VIDEO_RAM, screen,
 };
 use dcpu16::{DCPU16, NUM_RAM_WORDS};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::cell::Cell;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -46,6 +45,58 @@ pub enum State {
 
 /// The registers `A`–`J`, then `PC`, `SP` and `O`.
 pub type Registers = [u16; 11];
+
+/// A key press, whether it came from a terminal or a browser.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Key {
+    /// Which key was pressed.
+    pub code: KeyCode,
+    /// Whether `Ctrl` was held.
+    pub ctrl: bool,
+}
+
+/// The keys the interface and the programs care about.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum KeyCode {
+    /// A character key.
+    Char(char),
+    /// Enter.
+    Enter,
+    /// Backspace.
+    Backspace,
+    /// Tab.
+    Tab,
+    /// Escape.
+    Esc,
+    /// Delete.
+    Delete,
+    /// Arrow up.
+    Up,
+    /// Arrow down.
+    Down,
+    /// Arrow left.
+    Left,
+    /// Arrow right.
+    Right,
+    /// A function key, `F(1)` to `F(12)`.
+    F(u8),
+}
+
+impl Key {
+    /// A key pressed without `Ctrl`.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub fn new(code: KeyCode) -> Self {
+        Self { code, ctrl: false }
+    }
+}
+
+/// An assembled program the interface can run.
+pub struct Program {
+    /// The name shown in the header, e.g. the file name.
+    pub name: String,
+    /// The assembled program words.
+    pub words: Vec<u16>,
+}
 
 /// Recent use of the memory-mapped devices, as the number of frames each
 /// activity light stays lit.
@@ -94,10 +145,12 @@ impl DeviceState {
 
 /// The emulated machine and the controls around it.
 pub struct App {
-    /// The name of the program, shown in the header.
-    pub name: String,
-    /// The assembled program, kept for resets.
-    program: Vec<u16>,
+    /// The programs to choose from with F3; resets reload the current one.
+    programs: Vec<Program>,
+    /// Index into `programs` of the running program.
+    current: usize,
+    /// Whether Ctrl+C quits; not in a browser, which has no way out.
+    pub can_quit: bool,
     /// The CPU with the keyboard and console attached.
     pub cpu: DCPU16,
     /// Types keys on the attached keyboard.
@@ -132,10 +185,25 @@ pub struct App {
 
 impl App {
     /// Loads the program and starts running it.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub fn new(program: Vec<u16>, name: impl Into<String>) -> Self {
-        let (cpu, keyboard, output) = boot(&program);
-        Self {
+        Self::with_programs(vec![Program {
             name: name.into(),
+            words: program,
+        }])
+    }
+
+    /// Loads the first of `programs` and starts running it; F3 switches to the next.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `programs` is empty.
+    pub fn with_programs(programs: Vec<Program>) -> Self {
+        let (cpu, keyboard, output) = boot(&programs[0].words);
+        Self {
+            programs,
+            current: 0,
+            can_quit: true,
             previous: registers(&cpu),
             code_top: Cell::new(cpu.program_counter),
             activity: Activity::default(),
@@ -143,7 +211,6 @@ impl App {
             meter: (0, Duration::ZERO),
             frame: 0,
             trace: vec![0; NUM_RAM_WORDS],
-            program,
             cpu,
             keyboard,
             output,
@@ -152,6 +219,16 @@ impl App {
             budget: 0.0,
             quit: false,
         }
+    }
+
+    /// Gets the name of the running program.
+    pub fn name(&self) -> &str {
+        &self.programs[self.current].name
+    }
+
+    /// Whether F3 has other programs to switch to.
+    pub fn has_program_choice(&self) -> bool {
+        self.programs.len() > 1
     }
 
     /// Gets the emulation speed in cycles per second.
@@ -236,16 +313,11 @@ impl App {
         running
     }
 
-    /// Reacts to a key: controls on function keys and `Ctrl`, everything else goes
-    /// to the program's keyboard.
-    pub fn handle_key(&mut self, key: KeyEvent) {
-        if key.kind == KeyEventKind::Release {
-            return;
-        }
-
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    /// Reacts to a key press: controls on function keys and `Ctrl`, everything else
+    /// goes to the program's keyboard.
+    pub fn handle_key(&mut self, key: Key) {
         match key.code {
-            KeyCode::Char('c' | 'q') if ctrl => self.quit = true,
+            KeyCode::Char('c' | 'q') if key.ctrl => self.quit = self.can_quit,
             KeyCode::F(5) => {
                 self.state = match self.state {
                     State::Running => State::Paused,
@@ -261,6 +333,10 @@ impl App {
                 }
             }
             KeyCode::F(2) => self.reset(),
+            KeyCode::F(3) if self.has_program_choice() => {
+                self.current = (self.current + 1) % self.programs.len();
+                self.reset();
+            }
             KeyCode::F(7) => self.speed = self.speed.saturating_sub(1),
             KeyCode::F(8) => self.speed = (self.speed + 1).min(SPEEDS.len() - 1),
             _ => {
@@ -273,7 +349,7 @@ impl App {
 
     /// Reloads the program into a fresh machine and runs it.
     fn reset(&mut self) {
-        let (cpu, keyboard, output) = boot(&self.program);
+        let (cpu, keyboard, output) = boot(&self.programs[self.current].words);
         self.previous = registers(&cpu);
         self.code_top.set(cpu.program_counter);
         self.cpu = cpu;
@@ -322,8 +398,8 @@ fn boot(program: &[u16]) -> (DCPU16, KeyboardInput, ConsoleOutput) {
 /// Backspace, `\t` for Tab, `\x1b` for Escape and `\x7f` for Delete. The arrow keys
 /// use the codes of the DCPU-16 generic keyboard: `0x80` up, `0x81` down,
 /// `0x82` left and `0x83` right. Keys combined with `Ctrl` are not sent.
-fn key_code(key: KeyEvent) -> Option<u16> {
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
+fn key_code(key: Key) -> Option<u16> {
+    if key.ctrl {
         return None;
     }
     Some(match key.code {
@@ -337,7 +413,7 @@ fn key_code(key: KeyEvent) -> Option<u16> {
         KeyCode::Down => 0x81,
         KeyCode::Left => 0x82,
         KeyCode::Right => 0x83,
-        _ => return None,
+        KeyCode::F(_) => return None,
     })
 }
 
@@ -399,8 +475,8 @@ impl Write for ConsoleOutput {
 mod tests {
     use super::*;
 
-    fn press(code: KeyCode) -> KeyEvent {
-        KeyEvent::new(code, KeyModifiers::NONE)
+    fn press(code: KeyCode) -> Key {
+        Key::new(code)
     }
 
     fn app(source: &str) -> App {
@@ -416,7 +492,10 @@ mod tests {
         assert_eq!(key_code(press(KeyCode::Left)), Some(0x82));
         assert_eq!(key_code(press(KeyCode::F(1))), None);
         assert_eq!(
-            key_code(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL)),
+            key_code(Key {
+                code: KeyCode::Char('x'),
+                ctrl: true
+            }),
             None
         );
     }
@@ -627,7 +706,41 @@ mod tests {
     #[test]
     fn quits_on_ctrl_c() {
         let mut app = app("SET A, 1");
-        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        let ctrl_c = Key {
+            code: KeyCode::Char('c'),
+            ctrl: true,
+        };
+        app.handle_key(ctrl_c);
         assert!(app.quit);
+
+        // A browser has no way out, so Ctrl+C stays with the browser.
+        let mut app = super::App::new(vec![0x8401], "test.dasm");
+        app.can_quit = false;
+        app.handle_key(ctrl_c);
+        assert!(!app.quit);
+    }
+
+    #[test]
+    fn switches_programs_with_f3() {
+        let program = |source: &str, name: &str| Program {
+            name: name.into(),
+            words: dcpu16::assemble(source).unwrap(),
+        };
+        let mut app = App::with_programs(vec![
+            program("SET A, 1", "one.dasm"),
+            program("SET A, 2", "two.dasm"),
+        ]);
+        assert!(app.has_program_choice());
+        app.advance(Duration::from_millis(10));
+        assert_eq!(app.cpu.register(dcpu16::Register::A), 1);
+
+        app.handle_key(press(KeyCode::F(3)));
+        assert_eq!(app.name(), "two.dasm");
+        assert_eq!(app.state, State::Running);
+        app.advance(Duration::from_millis(10));
+        assert_eq!(app.cpu.register(dcpu16::Register::A), 2);
+
+        app.handle_key(press(KeyCode::F(3)));
+        assert_eq!(app.name(), "one.dasm");
     }
 }

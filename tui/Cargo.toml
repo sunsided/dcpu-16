@@ -13,4 +13,16 @@ categories = ["emulators", "command-line-utilities"]
 
 [dependencies]
 dcpu16 = { version = "0.2.0", path = ".." }
-ratatui = "0.30.2"
+ratatui = { version = "0.30.2", default-features = false, features = ["std", "layout-cache"] }
+
+# Terminal build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+
+# Browser build (`trunk build`): Ratzilla renders into a WebGL2 canvas.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.7"
+ratzilla = "0.3.1"
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Document", "KeyboardEvent", "Window"] }
+web-time = "1"
