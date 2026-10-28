@@ -253,3 +253,55 @@ fn skipping_a_reserved_opcode_continues_execution() {
     cpu.run();
     assert_eq!(cpu.register(Register::B), 1);
 }
+
+/// Runs `source` and returns the number of cycles it took.
+fn cycles(source: &str) -> u64 {
+    run(source, |cpu| cpu.cycles())
+}
+
+#[test]
+fn counts_cycles_per_operation() {
+    assert_eq!(cycles("SET A, 1"), 1);
+    assert_eq!(cycles("AND A, 1\nBOR A, 1\nXOR A, 1"), 3);
+    assert_eq!(
+        cycles("ADD A, 1\nSUB A, 1\nMUL A, 1\nSHL A, 1\nSHR A, 1"),
+        10
+    );
+    assert_eq!(cycles("DIV A, 1\nMOD A, 1"), 6);
+    assert_eq!(cycles("JSR 3\nSET A, 1\nSET A, 1\nSET A, 1"), 3);
+}
+
+#[test]
+fn counts_a_cycle_per_extra_word() {
+    assert_eq!(cycles("SET A, 0x20"), 2);
+    assert_eq!(cycles("SET [0x1000], 0x20"), 3);
+    assert_eq!(cycles("SET [0x10+A], [B]"), 2);
+    assert_eq!(cycles("DIV [0x1000], 0x20"), 5);
+}
+
+#[test]
+fn failed_test_takes_an_extra_cycle_and_skipping_is_free() {
+    assert_eq!(cycles("IFE A, 0\nSET B, 1"), 3);
+    assert_eq!(cycles("IFE A, 1\nSET [0x1000], 0x20\nSET B, 1"), 4);
+}
+
+#[test]
+fn run_for_stops_after_the_given_cycles() {
+    // Each iteration takes 3 cycles: ADD takes 2, the short jump 1.
+    let program = assemble(":loop ADD A, 1\nSET PC, loop").unwrap();
+    let mut cpu = DCPU16::new(&program);
+    assert!(cpu.run_for(10));
+    assert_eq!(cpu.cycles(), 11);
+    assert_eq!(cpu.register(Register::A), 4);
+
+    assert!(cpu.run_for(3));
+    assert_eq!(cpu.register(Register::A), 5);
+}
+
+#[test]
+fn run_for_reports_when_execution_stops() {
+    let program = assemble("SET A, 1\n:end SET PC, end").unwrap();
+    let mut cpu = DCPU16::new(&program);
+    assert!(!cpu.run_for(100));
+    assert_eq!(cpu.cycles(), 2);
+}

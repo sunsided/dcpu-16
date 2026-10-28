@@ -1,14 +1,16 @@
 //! An emulator for the DCPU-16 16-bit processor from the 0x10c game,
 //! with an optional assembler behind the `assembler` feature.
 //!
-//! Load a program with [`DCPU16::new`] and execute it with [`DCPU16::run`]
-//! or [`DCPU16::step`]. With the `assembler` feature, `assemble` turns
-//! DCPU-16 assembly source into program words.
+//! Load a program with [`DCPU16::new`] and execute it with [`DCPU16::run`],
+//! [`DCPU16::run_for`] or [`DCPU16::step`]. Memory-mapped [`devices`] such as a
+//! keyboard and a console can be attached with [`DCPU16::attach`]. With the
+//! `assembler` feature, `assemble` turns DCPU-16 assembly source into program words.
 
 #![warn(missing_docs, clippy::missing_docs_in_private_items)]
 
 #[cfg(feature = "assembler")]
 mod assembler;
+pub mod devices;
 mod disassemble;
 mod instruction;
 mod instruction_argument;
@@ -17,6 +19,7 @@ mod register;
 
 #[cfg(feature = "assembler")]
 pub use crate::assembler::{AssembleError, AssembleErrorKind, Position, assemble};
+use crate::devices::Device;
 use crate::instruction::{Instruction, InstructionWithOperands, ResolvedValue};
 use crate::instruction_argument::{
     InstructionArgument, InstructionArgumentDefinition, Location, SpecialRegister, StackOperation,
@@ -32,7 +35,7 @@ type Word = u16;
 /// Number of general-purpose registers (`A`, `B`, `C`, `X`, `Y`, `Z`, `I`, `J`).
 const NUM_REGISTERS: usize = 8;
 /// Number of words of RAM.
-const NUM_RAM_WORDS: usize = 0x10000;
+pub const NUM_RAM_WORDS: usize = 0x10000;
 
 /// Largest program, in words, that [`DCPU16::new`] accepts.
 const MAX_PROGRAM_WORDS: usize = u16::MAX as usize - 1;
@@ -69,6 +72,10 @@ pub struct DCPU16 {
     program_length: usize,
     /// Indicates whether the next instruction should be skipped.
     skip_next_instruction: bool,
+    /// Number of cycles executed so far.
+    cycles: u64,
+    /// Devices that are ticked after every instruction.
+    devices: Vec<Box<dyn Device + Send>>,
 }
 
 impl DCPU16 {
@@ -92,6 +99,8 @@ impl DCPU16 {
             program_length: program.len(),
             previous_program_counter: 0,
             skip_next_instruction: false,
+            cycles: 0,
+            devices: Vec::new(),
         };
 
         info!(
@@ -117,9 +126,34 @@ impl DCPU16 {
         self.ram.as_mut()
     }
 
+    /// Gets the number of cycles executed so far, as defined by the specification.
+    pub fn cycles(&self) -> u64 {
+        self.cycles
+    }
+
+    /// Attaches a device, which is ticked after every executed instruction from now on.
+    pub fn attach(&mut self, device: impl Device + Send + 'static) {
+        self.devices.push(Box::new(device));
+    }
+
     /// Executes the program until it ends, hits a reserved opcode or a crash loop is detected.
     pub fn run(&mut self) {
         while self.step() {}
+    }
+
+    /// Executes instructions until at least `cycles` more cycles have passed or execution stops.
+    ///
+    /// Returns `false` if execution stopped, like [`step`](Self::step) does. Calling this
+    /// repeatedly with a pause in between paces the program, e.g. 1000 cycles every 10 ms
+    /// for the 100 kHz the DCPU-16 runs at in 0x10c.
+    pub fn run_for(&mut self, cycles: u64) -> bool {
+        let end = self.cycles.saturating_add(cycles);
+        while self.cycles < end {
+            if !self.step() {
+                return false;
+            }
+        }
+        true
     }
 
     /// Executes a single instruction of the program.
@@ -132,6 +166,7 @@ impl DCPU16 {
 
         if self.skip_next_instruction {
             // Skipped instructions are not resolved, so their operands have no side effects.
+            // Skipping costs nothing beyond the extra cycle the failed test already took.
             self.execute_skipped_instruction(instruction);
         } else {
             let (_, instruction_word, _, _) = instruction.unpack();
@@ -143,8 +178,15 @@ impl DCPU16 {
                 return false;
             }
 
+            self.cycles += instruction_word.cycles();
             let instruction = InstructionWithOperands::resolve(self, instruction);
-            if !self.execute_instruction(instruction) {
+            let keep_running = self.execute_instruction(instruction);
+            if self.skip_next_instruction {
+                // A failed test takes one extra cycle.
+                self.cycles += 1;
+            }
+            self.tick_devices();
+            if !keep_running {
                 return false;
             }
         }
@@ -158,6 +200,13 @@ impl DCPU16 {
 
         warn!("End of program reached - terminating");
         false
+    }
+
+    /// Lets every attached device access the RAM.
+    fn tick_devices(&mut self) {
+        for device in &mut self.devices {
+            device.tick(&mut self.ram);
+        }
     }
 
     /// "Executes" a skipped instruction.

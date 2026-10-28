@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "Fuzz targets for the dcpu16 assembler"
 publish = false
 edition = "2024"
+rust-version = "1.85"
 
 [package.metadata]
 cargo-fuzz = true
