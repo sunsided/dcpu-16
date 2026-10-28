@@ -31,8 +31,13 @@ pub enum State {
     Halted,
 }
 
+/// The registers `A`–`J`, then `PC`, `SP` and `O`.
+pub type Registers = [u16; 11];
+
 /// The emulated machine and the controls around it.
 pub struct App {
+    /// The name of the program, shown in the header.
+    pub name: String,
     /// The assembled program, kept for resets.
     program: Vec<u16>,
     /// The CPU with the keyboard and console attached.
@@ -47,15 +52,19 @@ pub struct App {
     speed: usize,
     /// Cycles due but not executed yet; negative after an instruction overshot.
     budget: f64,
+    /// The registers before the last frame or step, to highlight what changed.
+    pub previous: Registers,
     /// Set once the user asked to quit.
     pub quit: bool,
 }
 
 impl App {
     /// Loads the program and starts running it.
-    pub fn new(program: Vec<u16>) -> Self {
+    pub fn new(program: Vec<u16>, name: impl Into<String>) -> Self {
         let (cpu, keyboard, output) = boot(&program);
         Self {
+            name: name.into(),
+            previous: registers(&cpu),
             program,
             cpu,
             keyboard,
@@ -77,6 +86,7 @@ impl App {
         if self.state != State::Running {
             return;
         }
+        self.previous = registers(&self.cpu);
 
         self.budget += elapsed.min(MAX_ELAPSED).as_secs_f64() * self.speed() as f64;
         if self.budget < 1.0 {
@@ -110,6 +120,7 @@ impl App {
                 self.budget = 0.0;
             }
             KeyCode::F(10) if self.state == State::Paused => {
+                self.previous = registers(&self.cpu);
                 if !self.cpu.step() {
                     self.state = State::Halted;
                 }
@@ -128,12 +139,31 @@ impl App {
     /// Reloads the program into a fresh machine and runs it.
     fn reset(&mut self) {
         let (cpu, keyboard, output) = boot(&self.program);
+        self.previous = registers(&cpu);
         self.cpu = cpu;
         self.keyboard = keyboard;
         self.output = output;
         self.state = State::Running;
         self.budget = 0.0;
     }
+}
+
+/// Reads the registers shown in the registers panel.
+pub fn registers(cpu: &DCPU16) -> Registers {
+    use dcpu16::Register::{A, B, C, I, J, X, Y, Z};
+    [
+        cpu.register(A),
+        cpu.register(B),
+        cpu.register(C),
+        cpu.register(X),
+        cpu.register(Y),
+        cpu.register(Z),
+        cpu.register(I),
+        cpu.register(J),
+        cpu.program_counter,
+        cpu.stack_pointer,
+        cpu.overflow,
+    ]
 }
 
 /// Creates a CPU running `program` with a keyboard and a console attached.
@@ -211,7 +241,7 @@ mod tests {
     }
 
     fn app(source: &str) -> App {
-        App::new(dcpu16::assemble(source).unwrap())
+        App::new(dcpu16::assemble(source).unwrap(), "test.dasm")
     }
 
     #[test]
@@ -260,6 +290,8 @@ mod tests {
 
         app.handle_key(press(KeyCode::F(10)));
         assert_eq!(app.cpu.register(dcpu16::Register::A), 1);
+        assert_eq!(app.previous[0], 0);
+        assert_eq!(registers(&app.cpu)[0], 1);
 
         app.handle_key(press(KeyCode::F(2)));
         assert_eq!(app.state, State::Running);

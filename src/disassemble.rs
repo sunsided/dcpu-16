@@ -264,3 +264,77 @@ impl Disassemble for InstructionWithOperands {
         }
     }
 }
+
+impl ResolvedValue {
+    /// Names the operand for [`InstructionWithOperands::describe`]: memory reads
+    /// as `RAM[...]`, including the stack operations.
+    fn describe(&self) -> String {
+        match self.argument_definition {
+            InstructionArgumentDefinition::AtAddressFromNextWord => {
+                format!("RAM[0x{:02X}]", self.argument.get_literal().unwrap())
+            }
+            InstructionArgumentDefinition::AtAddressFromRegister { register } => {
+                format!("RAM[{}]", register.disassemble())
+            }
+            InstructionArgumentDefinition::AtAddressFromNextWordPlusRegister { .. } => {
+                match self.argument {
+                    InstructionArgument::AddressOffset { address, register } => {
+                        format!("RAM[0x{:02X}+{}]", address, register.disassemble())
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            InstructionArgumentDefinition::Push => String::from("RAM[--SP]"),
+            InstructionArgumentDefinition::Pop => String::from("RAM[SP++]"),
+            InstructionArgumentDefinition::Peek => String::from("RAM[SP]"),
+            _ => self.disassemble(),
+        }
+    }
+}
+
+impl InstructionWithOperands {
+    /// Describes what the instruction does in plain English, e.g. `store 0x20 in RAM[X]`.
+    pub fn describe(&self) -> String {
+        let a = self.a.describe();
+        let b = || self.b.expect("require second argument");
+        match self.instruction {
+            InstructionWord::Set { .. } => {
+                let b = b();
+                match (self.a.argument_definition, b.argument_definition) {
+                    (
+                        InstructionArgumentDefinition::OfProgramCounter,
+                        InstructionArgumentDefinition::Pop,
+                    ) => String::from("return from subroutine"),
+                    (InstructionArgumentDefinition::OfProgramCounter, _) => {
+                        format!("jump to {}", b.describe())
+                    }
+                    (InstructionArgumentDefinition::Push, _) => format!("push {}", b.describe()),
+                    (_, InstructionArgumentDefinition::Pop) => format!("pop into {a}"),
+                    _ => format!("store {} in {a}", b.describe()),
+                }
+            }
+            InstructionWord::Add { .. } => format!("add {} to {a}", b().describe()),
+            InstructionWord::Sub { .. } => format!("subtract {} from {a}", b().describe()),
+            InstructionWord::Mul { .. } => format!("multiply {a} by {}", b().describe()),
+            InstructionWord::Div { .. } => format!("divide {a} by {}", b().describe()),
+            InstructionWord::Mod { .. } => format!("set {a} to {a} modulo {}", b().describe()),
+            InstructionWord::Shl { .. } => format!("shift {a} left by {}", b().describe()),
+            InstructionWord::Shr { .. } => format!("shift {a} right by {}", b().describe()),
+            InstructionWord::And { .. } => {
+                format!("keep the bits of {a} set in {}", b().describe())
+            }
+            InstructionWord::Bor { .. } => format!("set the bits of {} in {a}", b().describe()),
+            InstructionWord::Xor { .. } => format!("flip the bits of {} in {a}", b().describe()),
+            InstructionWord::Ife { .. } => format!("run next if {a} == {}", b().describe()),
+            InstructionWord::Ifn { .. } => format!("run next if {a} != {}", b().describe()),
+            InstructionWord::Ifg { .. } => format!("run next if {a} > {}", b().describe()),
+            InstructionWord::Ifb { .. } => format!("run next if {a} & {} != 0", b().describe()),
+            InstructionWord::NonBasic(NonBasicInstruction::Jsr { .. }) => {
+                format!("call subroutine at {a}")
+            }
+            InstructionWord::NonBasic(NonBasicInstruction::Reserved) => {
+                String::from("reserved opcode")
+            }
+        }
+    }
+}

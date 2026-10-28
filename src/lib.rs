@@ -56,6 +56,8 @@ trait Decode {
 pub struct Disassembly {
     /// The instruction in assembly syntax, e.g. `SET [0x1000], 0x20`.
     pub text: String,
+    /// What the instruction does in plain English, e.g. `store 0x20 in RAM[0x1000]`.
+    pub description: String,
     /// The number of words the instruction occupies, from one to three.
     pub length: u16,
 }
@@ -152,13 +154,19 @@ impl DCPU16 {
     pub fn disassemble(&self, address: u16) -> Disassembly {
         let instruction = self.instruction_at(address);
         let (raw_instruction, instruction_word, _, _) = instruction.unpack();
-        let text = if instruction_word == InstructionWord::NonBasic(NonBasicInstruction::Reserved) {
-            format!("DAT 0x{raw_instruction:04X}")
-        } else {
-            InstructionWithOperands::inspect(self, instruction).disassemble()
-        };
+        let (text, description) =
+            if instruction_word == InstructionWord::NonBasic(NonBasicInstruction::Reserved) {
+                (
+                    format!("DAT 0x{raw_instruction:04X}"),
+                    String::from("reserved opcode"),
+                )
+            } else {
+                let instruction = InstructionWithOperands::inspect(self, instruction);
+                (instruction.disassemble(), instruction.describe())
+            };
         Disassembly {
             text,
+            description,
             length: instruction_word.length_in_words() as u16,
         }
     }

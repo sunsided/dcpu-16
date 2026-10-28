@@ -7,6 +7,7 @@
 #![warn(missing_docs, clippy::missing_docs_in_private_items)]
 
 mod app;
+mod theme;
 mod ui;
 
 use crate::app::App;
@@ -56,8 +57,11 @@ fn main() -> ExitCode {
         }
     };
 
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
     let terminal = ratatui::init();
-    let result = run(terminal, App::new(program));
+    let result = run(terminal, App::new(program, name));
     ratatui::restore();
 
     match result {

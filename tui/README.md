@@ -6,8 +6,13 @@ program, runs it at the 100 kHz of the original, and shows:
 - **Screen:** the 32×12 character cells at `0x8000`, with colors from the LEM1802
   palette and blinking. Cells without color bits use the terminal's colors.
 - **Console:** what the program printed through the console word at `0x9010`.
-- **Registers:** `A`–`J`, `PC`, `SP`, `O` and the cycle count.
-- **Code:** the disassembled instructions from the program counter on.
+- **Registers:** `A`–`J`, `PC`, `SP`, `O` and the cycle count; values that just
+  changed light up.
+- **Code:** the disassembled instructions from the program counter on, syntax
+  highlighted and with a plain-English comment, e.g. `SET [X], 0xF0DF ; store 0xF0DF in RAM[X]`.
+
+The look is a phosphor ship console: amber chrome and green phosphor on near-black,
+which needs a terminal with 24-bit color.
 
 Typed keys go to the keyboard ring buffer at `0x9000`, as their Unicode value. Enter
 is `0x0a`, Backspace `0x08`, and the arrow keys are `0x80`–`0x83`.
