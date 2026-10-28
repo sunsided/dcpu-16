@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn code_panel_scrolls_near_the_bottom_and_follows_jumps() {
-        let program = dcpu16::assemble(&"ADD A, 1\n".repeat(40)).unwrap();
+        let program = dcpu16::assemble("ADD A, 1\n".repeat(40)).unwrap();
         let mut app = App::new(program, "straight.dasm");
         app.state = State::Paused;
 
