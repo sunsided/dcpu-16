@@ -26,8 +26,8 @@ const MIN_HARDWARE_WIDTH: u16 = 40;
 /// Number of segments in the clock gauge.
 const GAUGE_SEGMENTS: usize = 10;
 
-/// Draws the whole interface.
-pub fn draw(frame: &mut Frame, app: &App, blink_on: bool) {
+/// Draws the whole interface into `area`; the rest of the frame stays background.
+pub fn draw(frame: &mut Frame, area: Rect, app: &App, blink_on: bool) {
     frame.render_widget(Block::new().style(Style::new().bg(BG).fg(FG)), frame.area());
 
     let [header, body, footer] = Layout::vertical([
@@ -35,7 +35,7 @@ pub fn draw(frame: &mut Frame, app: &App, blink_on: bool) {
         Constraint::Min(0),
         Constraint::Length(1),
     ])
-    .areas(frame.area());
+    .areas(area);
     let [left, right] =
         Layout::horizontal([Constraint::Length(SCREEN_PANEL_WIDTH), Constraint::Min(24)])
             .areas(body);
@@ -57,7 +57,7 @@ pub fn draw(frame: &mut Frame, app: &App, blink_on: bool) {
         draw_registers(frame, registers_area, app);
     }
     draw_code(frame, code_area, app);
-    draw_footer(frame, footer);
+    draw_footer(frame, footer, app);
 }
 
 /// A rounded panel with an amber title.
@@ -71,13 +71,19 @@ fn panel(title: &str) -> Block<'_> {
 /// Draws the title bar with the program name, the execution state and the speed.
 fn draw_header(frame: &mut Frame, area: Rect, app: &App, blink_on: bool) {
     let bar = Style::new().bg(BAR_BG);
-    let title = Line::from(vec![
+    let mut title = vec![
         Span::styled(" ▓▒░ ", theme::fg(AMBER)),
         Span::styled("DCPU-16", theme::bold(AMBER)),
         Span::styled(" ░▒▓  ", theme::fg(AMBER)),
-        Span::styled(app.name.as_str(), theme::fg(FG)),
-    ]);
-    frame.render_widget(Paragraph::new(title).style(bar), area);
+        Span::styled(app.name(), theme::fg(FG)),
+    ];
+    if let Some(notice) = &app.notice {
+        title.push(Span::styled(
+            format!("  ⚠ {notice}"),
+            theme::bold(theme::RED),
+        ));
+    }
+    frame.render_widget(Paragraph::new(Line::from(title)).style(bar), area);
 
     let (label, color) = match app.state {
         State::Running => ("RUNNING", GREEN),
@@ -473,16 +479,18 @@ fn highlight(text: &str) -> Vec<Span<'static>> {
     spans
 }
 
-/// Draws the key hints as keycaps.
-fn draw_footer(frame: &mut Frame, area: Rect) {
-    const KEYS: [(&str, &str); 5] = [
-        ("F5", "run/pause"),
-        ("F10", "step"),
-        ("F2", "reset"),
-        ("F7/F8", "speed"),
-        ("^C", "quit"),
+/// Draws the key hints as keycaps; F3 only with programs to choose from, and
+/// Ctrl+C only where quitting is possible.
+fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
+    let keys = [
+        Some(("F5", "run/pause")),
+        Some(("F10", "step")),
+        Some(("F2", "reset")),
+        app.has_program_choice().then_some(("F3", "program")),
+        Some(("F7/F8", "speed")),
+        app.can_quit.then_some(("^C", "quit")),
     ];
-    let spans = KEYS.iter().flat_map(|(key, action)| {
+    let spans = keys.into_iter().flatten().flat_map(|(key, action)| {
         [
             Span::styled(
                 format!(" {key} "),
@@ -532,7 +540,9 @@ mod tests {
     /// Renders `app` and returns the lines of the terminal.
     fn render(app: &App) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
-        terminal.draw(|frame| draw(frame, app, true)).unwrap();
+        terminal
+            .draw(|frame| draw(frame, frame.area(), app, true))
+            .unwrap();
         let buffer = terminal.backend().buffer();
         (0..buffer.area.height)
             .map(|y| {
@@ -712,6 +722,18 @@ mod tests {
         let rows = code_rows(&render(&app));
         assert_eq!(rows[0].0, "0020");
         assert!(rows[0].1);
+    }
+
+    #[test]
+    fn shows_a_notice_in_the_header() {
+        let mut app = App::new(dcpu16::assemble("SET A, 1").unwrap(), "demo.dasm");
+        app.notice = Some("no demo program named `tetris`".into());
+        let lines = render(&app);
+        assert!(
+            lines[0].contains("demo.dasm  ⚠ no demo program named `tetris`"),
+            "{}",
+            lines[0]
+        );
     }
 
     #[test]

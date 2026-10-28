@@ -35,3 +35,30 @@ cargo run -p dcpu16-tui -- tui/programs/typewriter.dasm
 
 Example programs are in [`programs`](programs): `hello.dasm` greets on the screen
 and the console, and `typewriter.dasm` types keys onto the screen.
+
+## In the browser
+
+The interface also runs in the browser, rendered into a WebGL2 canvas by
+[Ratzilla](https://github.com/ratatui/ratzilla), at
+**[sunsided.github.io/dcpu-16](https://sunsided.github.io/dcpu-16/)**. The demo programs are
+built in, and F3 switches between them.
+
+Query parameters choose what runs:
+
+| Parameter        | Effect                                                              |
+|------------------|---------------------------------------------------------------------|
+| `program=hello`  | Start with a demo program, with or without `.dasm`                  |
+| `source=…`       | Run this assembly source first; percent-encode it, `+` as `%2B`     |
+| `name=…`         | Name the `source` program in the header (default `shared.dasm`)     |
+
+For example, `?name=hi.dasm&source=SET%20%5B0x9010%5D%2C%200x48` prints `H` to the console.
+In JavaScript, `encodeURIComponent(source)` produces the right encoding. Source that does not
+assemble shows its error in the header, and the demo programs run instead.
+
+Building it needs [trunk](https://trunkrs.dev) and
+the `wasm32-unknown-unknown` target:
+
+```console
+task dev:web     # serve with live reload
+task build:web   # build the site into target/site
+```
