@@ -161,16 +161,13 @@ fn color(index: u8) -> Color {
 fn draw_console(frame: &mut Frame, area: Rect, app: &App) {
     let text = app.output.text();
     let height = usize::from(area.height.saturating_sub(2));
-    let lines: Vec<&str> = text.lines().collect();
-    // A trailing line break starts a new, still empty line.
-    let mut visible: Vec<Line> = lines
+    // Unlike `lines`, `split` keeps the empty line after a trailing line break,
+    // which is where the output continues.
+    let lines: Vec<&str> = text.split('\n').collect();
+    let visible: Vec<Line> = lines[lines.len().saturating_sub(height)..]
         .iter()
-        .skip(lines.len().saturating_sub(height))
         .map(|line| Line::raw(*line))
         .collect();
-    if text.ends_with('\n') && visible.len() == height {
-        visible.remove(0);
-    }
     frame.render_widget(
         Paragraph::new(visible)
             .style(theme::fg(GREEN))
@@ -602,6 +599,35 @@ mod tests {
         let halfway = trail_span(Some(TRAIL_FRAMES / 2)).style.fg;
         assert_ne!(halfway, Some(AMBER));
         assert_ne!(halfway, Some(BORDER));
+    }
+
+    /// Renders the console of an app that printed `output` into a `height` rows high area.
+    fn console(output: &str, height: u16) -> Vec<String> {
+        let mut app = App::new(dcpu16::assemble("SET A, 1").unwrap(), "console.dasm");
+        std::io::Write::write_all(&mut app.output, output.as_bytes()).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(12, height)).unwrap();
+        terminal
+            .draw(|frame| draw_console(frame, frame.area(), &app))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        (1..height.saturating_sub(1))
+            .map(|y| (1..11).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+            .map(|line| line.trim_end().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn console_shows_the_tail_and_the_line_after_a_break() {
+        assert_eq!(console("a\nb\nc", 4), ["b", "c"]);
+        assert_eq!(console("a\nb\nc\n", 4), ["c", ""]);
+        assert_eq!(console("a\n", 6), ["a", "", "", ""]);
+    }
+
+    #[test]
+    fn console_survives_an_area_without_rows() {
+        for height in 0..3 {
+            console("a\nb\n", height);
+        }
     }
 
     #[test]
